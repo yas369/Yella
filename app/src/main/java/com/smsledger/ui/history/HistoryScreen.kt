@@ -51,7 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
-import com.smsledger.core.money.formatRupees
+import com.smsledger.core.money.AmountInput
 import com.smsledger.core.money.formatRupeesWhole
 import com.smsledger.ui.components.TransactionRow
 import com.smsledger.ui.model.Category
@@ -68,12 +68,22 @@ private const val DAY_MS = 86_400_000L
 
 private fun Tx.date(): LocalDate = LocalDate.now().minusDays(daysAgo.toLong())
 
-/** Payee or amount match: "swiggy", "250", "₹1,250". */
+/**
+ * Payee or amount match (§14): "swiggy" by name; "250", "₹1,250" or "250.5" by amount. A whole-rupee
+ * query matches that rupee amount (₹250 and ₹250.50), never a longer number that contains it (₹1,250).
+ */
 internal fun Tx.matches(query: String): Boolean {
     val q = query.trim()
     if (q.isEmpty()) return true
-    return payee.contains(q, ignoreCase = true) ||
-        formatRupees(amountPaise).replace(",", "").contains(q.replace(",", "").removePrefix("₹"))
+    if (payee.contains(q, ignoreCase = true)) return true
+    val digits = q.removePrefix("₹").replace(",", "").trim()
+    if (digits.isEmpty() || !digits.all { it.isDigit() || it == '.' }) return false
+    return if ('.' in digits) {
+        val wanted = AmountInput.toPaise(digits)
+        wanted == amountPaise
+    } else {
+        digits.toLongOrNull() == amountPaise / 100
+    }
 }
 
 /** History (flows.md §11): search app bar → full-screen search, filters incl. a date range, day groups. */

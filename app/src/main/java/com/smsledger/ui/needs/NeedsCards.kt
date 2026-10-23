@@ -39,8 +39,8 @@ import com.smsledger.ui.theme.Space
 internal fun NeedsCard(
     item: NeedsItem,
     categories: List<Category>,
-    onTeach: (NeedsItem.Unreadable) -> Unit,
-    onResolve: (NeedsItem, String) -> Unit,
+    actions: NeedsActions,
+    untaggedCount: (String) -> Int,
     modifier: Modifier = Modifier,
 ) {
     Surface(modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.extraLarge) {
@@ -50,15 +50,15 @@ internal fun NeedsCard(
                     Kind("Couldn't read")
                     MessageBubble(item.sender, item.body)
                     Row(horizontalArrangement = Arrangement.spacedBy(Space.S)) {
-                        BigChoice("Teach", { onTeach(item) }, Modifier.weight(1f), Emphasis.Primary)
-                        BigChoice("Not a transaction", { onResolve(item, "Marked not a transaction") }, Modifier.weight(1f), Emphasis.Outline)
+                        BigChoice("Teach", { actions.teach(item) }, Modifier.weight(1f), Emphasis.Primary)
+                        BigChoice("Not a transaction", { actions.notATransaction(item) }, Modifier.weight(1f), Emphasis.Outline)
                     }
                 }
                 is NeedsItem.WhichAccount -> {
                     Kind("Which account?")
-                    Title("${item.prompt} could be either", item.amount)
-                    item.options.forEach { option -> BigChoice(option, { onResolve(item, "Linked to $option") }) }
-                    BigChoice("Neither is mine", { onResolve(item, "Ignored") }, emphasis = Emphasis.Outline)
+                    Title("${item.prompt} could be either", "${formatRupees(item.amountPaise)} debited · ${daysLabel(item.daysAgo)}")
+                    item.options.forEach { option -> BigChoice(option, { actions.pickAccount(item, option) }) }
+                    BigChoice("Neither is mine", { actions.pickAccount(item, null) }, emphasis = Emphasis.Outline)
                 }
                 is NeedsItem.PossibleTransfer -> {
                     Kind("Possible self-transfer")
@@ -66,28 +66,45 @@ internal fun NeedsCard(
                     Leg(Icons.AutoMirrored.Outlined.CallReceived, item.inLine)
                     Text(item.gap, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(horizontalArrangement = Arrangement.spacedBy(Space.S)) {
-                        BigChoice("Self-transfer", { onResolve(item, "Paired as self-transfer") }, Modifier.weight(1f), Emphasis.Primary)
-                        BigChoice("Separate", { onResolve(item, "Kept as separate payments") }, Modifier.weight(1f), Emphasis.Outline)
+                        BigChoice("Self-transfer", { actions.transfer(item, true) }, Modifier.weight(1f), Emphasis.Primary)
+                        BigChoice("Separate", { actions.transfer(item, false) }, Modifier.weight(1f), Emphasis.Outline)
                     }
                 }
                 is NeedsItem.NewPayee -> {
                     Kind("New payee")
                     Title(item.payee, "${formatRupees(item.amountPaise)} · ${item.whenLabel}")
-                    CategoryChips(categories, null, { onResolve(item, "${item.payee} → ${it.name}, and future payments too") }, singleLine = true)
+                    CategoryChips(categories, null, { actions.tag(item, it) }, singleLine = true)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        AssistChip(onClick = { onResolve(item, "Marked as lent") }, label = { Text("Lent") })
+                        AssistChip(onClick = { actions.lent(item) }, label = { Text("Lent") })
                         Spacer(Modifier.weight(1f))
-                        TextButton(onClick = { onResolve(item, "Skipped") }) { Text("Skip") }
+                        TextButton(onClick = { actions.skip(item) }) { Text("Skip") }
                     }
                 }
                 is NeedsItem.Bulk -> {
                     Kind("Tag in one go")
-                    Title("Tag all ${item.count} ${item.payee} payments", "Future ones will be tagged too")
-                    CategoryChips(categories, null, { onResolve(item, "${item.count} ${item.payee} payments → ${it.name}") }, singleLine = true)
+                    Title("Tag all ${untaggedCount(item.payee)} ${item.payee} payments", "Future ones will be tagged too")
+                    CategoryChips(categories, null, { actions.tag(item, it) }, singleLine = true)
                 }
             }
         }
     }
+}
+
+/** What each Needs-you answer does; the route maps these to store actions with Undo. */
+interface NeedsActions {
+    fun teach(item: NeedsItem.Unreadable)
+    fun notATransaction(item: NeedsItem)
+    fun pickAccount(item: NeedsItem.WhichAccount, account: String?)
+    fun transfer(item: NeedsItem.PossibleTransfer, isTransfer: Boolean)
+    fun tag(item: NeedsItem, category: Category)
+    fun lent(item: NeedsItem.NewPayee)
+    fun skip(item: NeedsItem)
+}
+
+private fun daysLabel(daysAgo: Int) = when (daysAgo) {
+    0 -> "today"
+    1 -> "yesterday"
+    else -> "$daysAgo days ago"
 }
 
 @Composable

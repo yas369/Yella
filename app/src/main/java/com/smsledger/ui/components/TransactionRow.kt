@@ -43,7 +43,7 @@ fun TransactionRow(tx: Tx, category: Category?, onClick: () -> Unit, modifier: M
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .padding(horizontal = Space.Gutter, vertical = Space.M)
-            .alpha(if (tx.kind == TxKind.Lent) 0.6f else 1f),
+            .alpha(if (tx.kind == TxKind.Lent || tx.excluded) 0.6f else 1f),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         TxAvatar(tx)
@@ -86,6 +86,7 @@ fun amountLabel(tx: Tx): String =
 @Composable
 private fun TxTag(tx: Tx, category: Category?) {
     val (text, color) = when {
+        tx.excluded -> "Not counted" to MaterialTheme.colorScheme.onSurfaceVariant
         tx.kind == TxKind.Lent -> "Lent" to MaterialTheme.colorScheme.onSurfaceVariant
         tx.kind == TxKind.Transfer -> "Transfer" to MaterialTheme.colorScheme.onSurfaceVariant
         tx.kind == TxKind.Income -> (tx.note.ifBlank { "Received" }) to MaterialTheme.colorScheme.onSurfaceVariant
@@ -93,7 +94,7 @@ private fun TxTag(tx: Tx, category: Category?) {
         else -> "Untagged" to MaterialTheme.colorScheme.tertiary
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.XS)) {
-        if (category == null && tx.kind == TxKind.Spend) {
+        if (category == null && tx.kind == TxKind.Spend && !tx.excluded) {
             Box(Modifier.size(6.dp).clip(CircleShape).background(MaterialTheme.colorScheme.tertiary))
         }
         Text(text, style = MaterialTheme.typography.labelMedium, color = color)

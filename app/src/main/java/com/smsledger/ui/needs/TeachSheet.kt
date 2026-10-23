@@ -46,7 +46,7 @@ import com.smsledger.ui.theme.Space
 fun TeachSheet(
     item: NeedsItem.Unreadable,
     onDismiss: () -> Unit,
-    onLearned: (summary: String) -> Unit,
+    onLearned: (amountPaise: Long, moneyIn: Boolean) -> Unit,
     onIgnoreLikeThis: () -> Unit,
 ) {
     var direction by rememberSaveable { mutableStateOf<String?>(null) }
@@ -105,8 +105,7 @@ fun TeachSheet(
                             )
                             Spacer(Modifier.height(Space.S))
                             BigChoice("Done", {
-                                val paise = AmountInput.toPaise(amount.orEmpty().replace(",", ""))
-                                onLearned("Learned · ${formatRupees(paise)} ${if (direction == "in") "received" else "spent"}")
+                                onLearned(AmountInput.toPaise(amount.orEmpty().replace(",", "")), direction == "in")
                             }, emphasis = Emphasis.Primary)
                         }
                     }

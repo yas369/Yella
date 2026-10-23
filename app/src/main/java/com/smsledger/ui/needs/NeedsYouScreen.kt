@@ -42,8 +42,8 @@ fun NeedsYouScreen(
     items: List<NeedsItem>,
     categories: List<Category>,
     onBack: () -> Unit,
-    onTeach: (NeedsItem.Unreadable) -> Unit,
-    onResolve: (item: NeedsItem, outcome: String) -> Unit,
+    actions: NeedsActions,
+    untaggedCount: (String) -> Int,
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
@@ -73,7 +73,7 @@ fun NeedsYouScreen(
             verticalArrangement = Arrangement.spacedBy(Space.M),
         ) {
             items(items, key = { it.id }) { item ->
-                NeedsCard(item, categories, onTeach, onResolve, Modifier.animateItem())
+                NeedsCard(item, categories, actions, untaggedCount, Modifier.animateItem())
             }
         }
     }

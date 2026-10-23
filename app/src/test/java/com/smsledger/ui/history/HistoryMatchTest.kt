@@ -28,6 +28,18 @@ class HistoryMatchTest {
     }
 
     @Test
+    fun `a shorter number does not match a longer amount that contains it`() {
+        assertFalse(swiggy.matches("250"))
+        assertFalse(swiggy.matches("125"))
+    }
+
+    @Test
+    fun `an exact amount with paise matches`() {
+        assertTrue(swiggy.matches("1250.00"))
+        assertFalse(swiggy.matches("1250.50"))
+    }
+
+    @Test
     fun `unrelated text does not match`() {
         assertFalse(swiggy.matches("dmart"))
     }

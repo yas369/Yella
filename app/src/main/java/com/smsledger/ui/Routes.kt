@@ -18,7 +18,9 @@ import com.smsledger.core.limit.limitStatus
 import com.smsledger.core.money.formatRupees
 import com.smsledger.ui.demo.DemoStore
 import com.smsledger.ui.history.HistoryScreen
+import com.smsledger.ui.model.Category
 import com.smsledger.ui.model.NeedsItem
+import com.smsledger.ui.needs.NeedsActions
 import com.smsledger.ui.needs.NeedsYouScreen
 import com.smsledger.ui.needs.TeachSheet
 import com.smsledger.ui.owed.OwedScreen
@@ -56,11 +58,11 @@ internal fun TodayRoute(
             status = status,
             spentPaise = spent,
             limitPaise = store.limitPaise,
-            transactions = store.today,
+            transactions = store.todayTransactions,
             needsCount = store.needs.size,
             needsSummary = needsSummary(store.needs),
             owedPaise = store.owedPaise,
-            owedPeople = store.debtors.count { it.outstandingPaise > 0 },
+            owedPeople = store.debtors.size,
             monthSpentPaise = store.monthSpentPaise,
             showAlertsCard = store.alertsCardVisible && !store.limitAlerts && status.fraction >= 0.5f,
             manualMode = !store.automatic,
@@ -132,17 +134,29 @@ internal fun SettingsRoute(store: DemoStore, notifier: Notifier, sheets: SheetSt
     )
 }
 
+/** Runs a store action and offers Undo, which restores everything the action changed. */
+internal fun DemoStore.act(notifier: Notifier, action: DemoStore.() -> String) {
+    val before = snapshot()
+    val message = action()
+    if (message.isNotEmpty()) notifier.show(message) { restore(before) }
+}
+
 @Composable
 internal fun NeedsRoute(store: DemoStore, notifier: Notifier, sheets: SheetState, onBack: () -> Unit) {
     NeedsYouScreen(
         items = store.needs,
         categories = store.categories,
         onBack = onBack,
-        onTeach = { sheets.teachingId = it.id },
-        onResolve = { item, outcome ->
-            val index = store.resolve(item)
-            notifier.show(outcome) { store.restoreNeed(index, item) }
+        actions = object : NeedsActions {
+            override fun teach(item: NeedsItem.Unreadable) { sheets.teachingId = item.id }
+            override fun notATransaction(item: NeedsItem) = store.act(notifier) { notATransaction(item) }
+            override fun pickAccount(item: NeedsItem.WhichAccount, account: String?) = store.act(notifier) { pickAccount(item, account) }
+            override fun transfer(item: NeedsItem.PossibleTransfer, isTransfer: Boolean) = store.act(notifier) { resolveTransfer(item, isTransfer) }
+            override fun tag(item: NeedsItem, category: Category) = store.act(notifier) { tagPayee(item, category.id) }
+            override fun lent(item: NeedsItem.NewPayee) = store.act(notifier) { lentFromNeeds(item) }
+            override fun skip(item: NeedsItem) = store.act(notifier) { skip(item) }
         },
+        untaggedCount = store::untaggedCount,
     )
 }
 
@@ -151,16 +165,8 @@ internal fun OwedRoute(store: DemoStore, notifier: Notifier, onBack: () -> Unit)
     OwedScreen(
         debtors = store.debtors,
         onBack = onBack,
-        onRepaid = { debtor ->
-            val index = store.debtors.indexOf(debtor)
-            store.debtors.removeAt(index)
-            notifier.show("${debtor.name} paid back ${formatRupees(debtor.outstandingPaise)}") { store.debtors.add(index, debtor) }
-        },
-        onWriteOff = { debtor ->
-            val index = store.debtors.indexOf(debtor)
-            store.debtors.removeAt(index)
-            notifier.show("Wrote off ${formatRupees(debtor.outstandingPaise)} from ${debtor.name}") { store.debtors.add(index, debtor) }
-        },
+        onRepaid = { debtor -> store.act(notifier) { markRepaid(debtor) } },
+        onWriteOff = { debtor -> store.act(notifier) { writeOff(debtor) } },
     )
 }
 
@@ -171,9 +177,8 @@ internal fun AppSheets(store: DemoStore, notifier: Notifier, sheets: SheetState)
             categories = store.categories,
             onDismiss = { sheets.adding = false },
             onSave = { paise, kind, categoryId, payee ->
-                val tx = store.add(paise, kind, categoryId, payee)
                 sheets.adding = false
-                notifier.show("Added ${formatRupees(paise)}") { store.remove(tx.id) }
+                store.act(notifier) { addManual(paise, kind, categoryId, payee) }
             },
         )
     }
@@ -186,34 +191,33 @@ internal fun AppSheets(store: DemoStore, notifier: Notifier, sheets: SheetState)
         }
     }
     store.transactions.firstOrNull { it.id == sheets.editingTxId }?.let { tx ->
+        fun close(action: DemoStore.() -> String) {
+            sheets.editingTxId = null
+            store.act(notifier, action)
+        }
         EditSheet(
             tx = tx,
             categories = store.categories,
-            similarCount = store.transactions.count { it.payee == tx.payee },
+            similarCount = store.similarCount(tx),
             onDismiss = { sheets.editingTxId = null },
-            onChange = { updated, summary ->
-                val previous = store.update(updated)
-                sheets.editingTxId = null
-                notifier.show(summary) { previous?.let(store::update) }
-            },
-            onNotTransaction = {
-                val removed = store.remove(tx.id)
-                sheets.editingTxId = null
-                notifier.show("Removed from totals") { removed?.let { (i, t) -> store.restore(i, t) } }
-            },
+            onKind = { kind -> close { setKind(tx, kind) } },
+            onCategory = { categoryId, all -> close { setCategory(tx, categoryId, all) } },
+            onExcluded = { excluded -> close { setExcluded(tx, excluded) } },
+            onDetails = { amount, kind, payee -> close { editDetails(tx, amount, kind, payee) } },
         )
     }
     store.needs.filterIsInstance<NeedsItem.Unreadable>().firstOrNull { it.id == sheets.teachingId }?.let { item ->
-        fun finish(message: String) {
-            val index = store.resolve(item)
-            sheets.teachingId = null
-            notifier.show(message) { store.restoreNeed(index, item) }
-        }
         TeachSheet(
             item = item,
             onDismiss = { sheets.teachingId = null },
-            onLearned = ::finish,
-            onIgnoreLikeThis = { finish("Messages like this will be ignored") },
+            onLearned = { amount, moneyIn ->
+                sheets.teachingId = null
+                store.act(notifier) { learn(item, amount, moneyIn) }
+            },
+            onIgnoreLikeThis = {
+                sheets.teachingId = null
+                store.act(notifier) { ignoreLikeThis(item) }
+            },
         )
     }
 }
