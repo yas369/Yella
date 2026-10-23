@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ledger mark: two entries and a day meter with the 80% gap. 108dp adaptive canvas, art inside the 66dp safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M38,36H70A4,4 0,0 1,74,40A4,4 0,0 1,70,44H38A4,4 0,0 1,34,40A4,4 0,0 1,38,36Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M38,49H58A4,4 0,0 1,62,53A4,4 0,0 1,58,57H38A4,4 0,0 1,34,53A4,4 0,0 1,38,49Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M39,63H51A5,5 0,0 1,56,68A5,5 0,0 1,51,73H39A5,5 0,0 1,34,68A5,5 0,0 1,39,63Z" />
+    <path android:fillAlpha="0.45" android:fillColor="#FFFFFFFF" android:pathData="M65,63H69A5,5 0,0 1,74,68A5,5 0,0 1,69,73H65A5,5 0,0 1,60,68A5,5 0,0 1,65,63Z" />
+</vector>

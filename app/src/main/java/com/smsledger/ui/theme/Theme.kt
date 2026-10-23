@@ -1,11 +1,14 @@
 package com.smsledger.ui.theme
 
+import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Shapes
+import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.MotionScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 
 /** 4-pt spacing scale. Screen gutter is [Space.Gutter]. */
@@ -14,27 +17,36 @@ object Space {
     val S = 8.dp
     val M = 12.dp
     val L = 16.dp
-    val Gutter = 20.dp
+    val Gutter = 16.dp
     val XL = 24.dp
     val XXL = 32.dp
     val XXXL = 48.dp
 }
 
-private val LedgerShapes = Shapes(
-    extraSmall = RoundedCornerShape(4.dp),
-    small = RoundedCornerShape(8.dp),
-    medium = RoundedCornerShape(12.dp),
-    large = RoundedCornerShape(16.dp),
-    extraLarge = RoundedCornerShape(28.dp),
-)
+/** Dynamic colour (Material You) exists from Android 12. */
+val supportsDynamicColor: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
+/**
+ * Material 3 Expressive: wallpaper-based colour on Android 12+ (brand "ledger" scheme below that or
+ * when switched off), expressive spring motion, and the expressive shape and type scales.
+ */
 @Composable
-fun SmsLedgerTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
+fun SmsLedgerTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    dynamicColor: Boolean = true,
+    content: @Composable () -> Unit,
+) {
+    val context = LocalContext.current
+    val colorScheme = when {
+        dynamicColor && supportsDynamicColor -> if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        darkTheme -> DarkColors
+        else -> LightColors
+    }
     CompositionLocalProvider(LocalLedgerColors provides if (darkTheme) DarkLedgerColors else LightLedgerColors) {
-        MaterialTheme(
-            colorScheme = if (darkTheme) DarkColors else LightColors,
+        MaterialExpressiveTheme(
+            colorScheme = colorScheme,
+            motionScheme = MotionScheme.expressive(),
             typography = LedgerTypography,
-            shapes = LedgerShapes,
             content = content,
         )
     }

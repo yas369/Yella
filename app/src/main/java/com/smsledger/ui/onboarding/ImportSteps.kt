@@ -19,11 +19,8 @@ import androidx.compose.material.icons.outlined.AccountBalance
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -36,9 +33,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.unit.dp
 import com.smsledger.ui.components.BigChoice
+import com.smsledger.ui.components.ConnectedChoice
 import com.smsledger.ui.components.Emphasis
 import com.smsledger.ui.model.DiscoveredAccount
 import com.smsledger.ui.theme.Space
@@ -59,7 +56,7 @@ internal fun ImportingStep(accounts: List<DiscoveredAccount>, onDone: () -> Unit
     val checked = (progress * 18_420).toInt()
     OnboardingFrame(actions = {}) {
         Spacer(Modifier.height(Space.XXXL))
-        Text("Reading your messages", style = MaterialTheme.typography.headlineMedium)
+        Text("Reading your messages", style = MaterialTheme.typography.headlineMediumEmphasized)
         Spacer(Modifier.height(Space.S))
         Text(
             "Finding your banks and wallets. This takes a minute the first time.",
@@ -67,11 +64,8 @@ internal fun ImportingStep(accounts: List<DiscoveredAccount>, onDone: () -> Unit
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(Space.XXL))
-        LinearProgressIndicator(
-            progress = { progress },
-            modifier = Modifier.fillMaxWidth().height(8.dp),
-            strokeCap = StrokeCap.Round,
-        )
+        // Expressive wavy progress: known progress, with a little life while it runs.
+        LinearWavyProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(Space.S))
         Text(
             "%,d messages checked".format(checked),
@@ -112,7 +106,7 @@ internal fun ConfirmAccountsStep(accounts: List<DiscoveredAccount>, onDone: () -
         },
     ) {
         Spacer(Modifier.height(Space.L))
-        Text("Which of these are yours?", style = MaterialTheme.typography.headlineMedium)
+        Text("Which of these are yours?", style = MaterialTheme.typography.headlineMediumEmphasized)
         Spacer(Modifier.height(Space.S))
         Text(
             "Only accounts marked Mine are counted. A family member's account on your number? Mark it Not mine.",
@@ -133,7 +127,7 @@ internal fun ConfirmAccountsStep(accounts: List<DiscoveredAccount>, onDone: () -
 
 @Composable
 private fun AccountCard(account: DiscoveredAccount, mine: Boolean?, onAnswer: (Boolean) -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, shape = MaterialTheme.shapes.large) {
+    Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.extraLarge) {
         Column(Modifier.padding(horizontal = Space.L, vertical = Space.M)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
@@ -148,15 +142,15 @@ private fun AccountCard(account: DiscoveredAccount, mine: Boolean?, onAnswer: (B
                 }
             }
             Spacer(Modifier.height(Space.S))
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                listOf(true to "Mine", false to "Not mine").forEachIndexed { index, (value, label) ->
-                    SegmentedButton(
-                        selected = mine == value,
-                        onClick = { onAnswer(value) },
-                        shape = SegmentedButtonDefaults.itemShape(index, 2),
-                    ) { Text(label) }
-                }
-            }
+            ConnectedChoice(
+                options = listOf("Mine", "Not mine"),
+                selectedIndex = when (mine) {
+                    true -> 0
+                    false -> 1
+                    null -> null
+                },
+                onSelect = { onAnswer(it == 0) },
+            )
         }
     }
 }

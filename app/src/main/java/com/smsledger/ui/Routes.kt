@@ -1,7 +1,15 @@
 package com.smsledger.ui
 
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.LazyListState
+import com.smsledger.BuildConfig
+import com.smsledger.ui.theme.supportsDynamicColor
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
+import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
+import com.smsledger.widget.LedgerWidgetReceiver
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,6 +44,7 @@ internal fun TodayRoute(
     store: DemoStore,
     notifier: Notifier,
     sheets: SheetState,
+    listState: LazyListState,
     padding: PaddingValues,
     onOpen: (Overlay) -> Unit,
     onHistory: () -> Unit,
@@ -69,6 +78,7 @@ internal fun TodayRoute(
             notifier.show("We'll ask again in a week") { store.alertsCardVisible = true }
         },
         onTxClick = { sheets.editingTxId = it.id },
+        listState = listState,
         contentPadding = padding,
     )
 }
@@ -91,8 +101,19 @@ internal fun HistoryRoute(store: DemoStore, sheets: SheetState, padding: Padding
 
 @Composable
 internal fun SettingsRoute(store: DemoStore, notifier: Notifier, sheets: SheetState, padding: PaddingValues, onOpenOwed: () -> Unit) {
+    val context = LocalContext.current
     SettingsScreen(
-        state = SettingsState(store.limitPaise, store.automatic, store.limitAlerts, store.lentReminder, store.scenario, store.darkOverride),
+        state = SettingsState(
+            limitPaise = store.limitPaise,
+            automatic = store.automatic,
+            limitAlerts = store.limitAlerts,
+            lentReminder = store.lentReminder,
+            scenario = store.scenario,
+            darkOverride = store.darkOverride,
+            dynamicColor = store.dynamicColor,
+            supportsDynamicColor = supportsDynamicColor,
+            showDesignPreview = BuildConfig.DEBUG,
+        ),
         onEditLimit = { sheets.editingLimit = true },
         onToggleMode = {
             store.automatic = !store.automatic
@@ -103,7 +124,9 @@ internal fun SettingsRoute(store: DemoStore, notifier: Notifier, sheets: SheetSt
         onOpenOwed = onOpenOwed,
         onScenario = store::applyScenario,
         onDarkOverride = { store.darkOverride = it },
+        onDynamicColor = { store.dynamicColor = it },
         onReplayOnboarding = { store.onboarded = false },
+        onAddWidget = { if (!requestPinWidget(context)) notifier.show("Your launcher can't add widgets this way. Long-press the home screen → Widgets.") },
         onNotBuilt = { notifier.show("$it isn't in this preview yet") },
         contentPadding = padding,
     )
@@ -193,4 +216,11 @@ internal fun AppSheets(store: DemoStore, notifier: Notifier, sheets: SheetState)
             onIgnoreLikeThis = { finish("Messages like this will be ignored") },
         )
     }
+}
+
+/** Asks the launcher to pin the home-screen widget (Android 8+). Returns false if the launcher can't. */
+private fun requestPinWidget(context: Context): Boolean {
+    val manager = AppWidgetManager.getInstance(context)
+    if (!manager.isRequestPinAppWidgetSupported) return false
+    return manager.requestPinAppWidget(ComponentName(context, LedgerWidgetReceiver::class.java), null, null)
 }

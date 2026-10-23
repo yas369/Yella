@@ -13,7 +13,11 @@ import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Category
 import androidx.compose.material.icons.outlined.Handshake
 import androidx.compose.material.icons.outlined.SwapHoriz
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -71,16 +75,17 @@ fun EditSheet(
                 Text("${tx.account} · ${tx.time}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (tx.kind == TxKind.Spend || tx.kind == TxKind.Lent || tx.kind == TxKind.Transfer) {
-                Row(horizontalArrangement = Arrangement.spacedBy(Space.S)) {
-                    QuickAction(Icons.Outlined.Handshake, "Lent", tx.kind == TxKind.Lent, Modifier.weight(1f)) {
+                // Connected toggle group (Expressive): Lent and Self-transfer toggle; Not a payment acts.
+                Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
+                    QuickAction(Icons.Outlined.Handshake, "Lent", tx.kind == TxKind.Lent, 0, Modifier.weight(1f)) {
                         val lent = tx.kind != TxKind.Lent
                         onChange(tx.copy(kind = if (lent) TxKind.Lent else TxKind.Spend), if (lent) "Marked as lent · not counted" else "No longer lent")
                     }
-                    QuickAction(Icons.Outlined.SwapHoriz, "Self-transfer", tx.kind == TxKind.Transfer, Modifier.weight(1f)) {
+                    QuickAction(Icons.Outlined.SwapHoriz, "Self-transfer", tx.kind == TxKind.Transfer, 1, Modifier.weight(1f)) {
                         val transfer = tx.kind != TxKind.Transfer
                         onChange(tx.copy(kind = if (transfer) TxKind.Transfer else TxKind.Spend), if (transfer) "Marked as self-transfer" else "No longer a transfer")
                     }
-                    QuickAction(Icons.Outlined.Block, "Not a payment", false, Modifier.weight(1f), onNotTransaction)
+                    QuickAction(Icons.Outlined.Block, "Not a payment", false, 2, Modifier.weight(1f), onNotTransaction)
                 }
             }
             if (tx.kind == TxKind.Spend) {
@@ -125,17 +130,25 @@ private fun ScopePrompt(payee: String, category: Category, similarCount: Int, on
 }
 
 @Composable
-private fun QuickAction(icon: ImageVector, label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
-        contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-        shape = MaterialTheme.shapes.medium,
-        modifier = modifier.height(76.dp).semantics { role = Role.Button; this.selected = selected },
+private fun QuickAction(icon: ImageVector, label: String, selected: Boolean, index: Int, modifier: Modifier, onClick: () -> Unit) {
+    ToggleButton(
+        checked = selected,
+        onCheckedChange = { onClick() },
+        modifier = modifier.height(80.dp),
+        shapes = when (index) {
+            0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+            2 -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+        },
+        colors = ToggleButtonDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        ),
+        contentPadding = PaddingValues(horizontal = Space.XS),
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Icon(icon, contentDescription = null)
-            Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = Space.XS))
+            Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1, modifier = Modifier.padding(top = Space.XS))
         }
     }
 }

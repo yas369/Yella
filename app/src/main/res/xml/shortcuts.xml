@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-press the launcher icon → "Add expense" (flows.md §12). -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_add"
+        android:shortcutId="add_expense"
+        android:shortcutLongLabel="@string/shortcut_add_long"
+        android:shortcutShortLabel="@string/shortcut_add_short">
+        <intent
+            android:action="com.smsledger.action.ADD_EXPENSE"
+            android:targetClass="com.smsledger.MainActivity"
+            android:targetPackage="com.smsledger" />
+    </shortcut>
+</shortcuts>

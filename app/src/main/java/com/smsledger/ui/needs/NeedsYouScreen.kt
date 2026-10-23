@@ -14,17 +14,21 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import com.smsledger.ui.components.LedgerShapes
+import com.smsledger.ui.components.ShapeBadge
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.smsledger.ui.model.Category
@@ -41,28 +45,19 @@ fun NeedsYouScreen(
     onTeach: (NeedsItem.Unreadable) -> Unit,
     onResolve: (item: NeedsItem, outcome: String) -> Unit,
 ) {
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text("Needs you")
-                        if (items.isNotEmpty()) {
-                            Text(
-                                "${items.size} to go · one tap each",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                },
+            LargeFlexibleTopAppBar(
+                title = { Text("Needs you") },
+                subtitle = if (items.isNotEmpty()) ({ Text("${items.size} to go · one tap each") }) else null,
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back") }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
+                scrollBehavior = scrollBehavior,
             )
         },
-        containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         if (items.isEmpty()) {
             AllCaughtUp(onBack, Modifier.padding(padding))
@@ -91,9 +86,11 @@ private fun AllCaughtUp(onBack: () -> Unit, modifier: Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Icon(Icons.Outlined.TaskAlt, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(56.dp))
-        Spacer(Modifier.height(Space.L))
-        Text("All caught up", style = MaterialTheme.typography.headlineSmall)
+        ShapeBadge(LedgerShapes.Done, MaterialTheme.colorScheme.primaryContainer, size = 112.dp) {
+            Icon(Icons.Outlined.TaskAlt, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(48.dp))
+        }
+        Spacer(Modifier.height(Space.XL))
+        Text("All caught up", style = MaterialTheme.typography.headlineSmallEmphasized)
         Spacer(Modifier.height(Space.S))
         Text(
             "New questions show up here when a message needs you.",
@@ -102,6 +99,6 @@ private fun AllCaughtUp(onBack: () -> Unit, modifier: Modifier) {
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(Space.XL))
-        Button(onClick = onBack) { Text("Back to Today") }
+        Button(onClick = onBack, shapes = ButtonDefaults.shapes()) { Text("Back to Today") }
     }
 }

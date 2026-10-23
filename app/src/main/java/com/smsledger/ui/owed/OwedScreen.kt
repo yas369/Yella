@@ -30,7 +30,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -39,6 +40,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import com.smsledger.ui.components.LedgerShapes
+import com.smsledger.ui.components.ShapeBadge
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.smsledger.core.money.formatRupees
@@ -53,29 +57,32 @@ import com.smsledger.ui.theme.Space
 fun OwedScreen(debtors: List<Debtor>, onBack: () -> Unit, onRepaid: (Debtor) -> Unit, onWriteOff: (Debtor) -> Unit) {
     var expandedId by rememberSaveable { mutableStateOf<Long?>(null) }
     var confirmWriteOff by rememberSaveable { mutableStateOf<Long?>(null) }
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
+            LargeFlexibleTopAppBar(
                 title = { Text("Owed to you") },
+                subtitle = { Text("${formatRupees(debtors.sumOf { it.outstandingPaise })} from ${debtors.size} ${if (debtors.size == 1) "person" else "people"}") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back") } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
+                scrollBehavior = scrollBehavior,
             )
         },
-        containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         LazyColumn(
             Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = Space.Gutter, end = Space.Gutter, top = padding.calculateTopPadding(), bottom = Space.XXL),
             verticalArrangement = Arrangement.spacedBy(Space.S),
         ) {
-            item {
-                Text(formatRupees(debtors.sumOf { it.outstandingPaise }), style = MoneyStyles.Large)
-                Text(
-                    if (debtors.isEmpty()) "No one owes you anything" else "owed by ${debtors.size} ${if (debtors.size == 1) "person" else "people"}",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(Space.L))
+            if (debtors.isEmpty()) {
+                item {
+                    Text(
+                        "No one owes you anything",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = Space.XL),
+                    )
+                }
             }
             items(debtors, key = { it.id }) { debtor ->
                 DebtorCard(
@@ -109,11 +116,11 @@ private fun DebtorCard(
     onWriteOff: () -> Unit,
     modifier: Modifier,
 ) {
-    Surface(onClick = onToggle, color = MaterialTheme.colorScheme.surfaceContainerLow, shape = MaterialTheme.shapes.large, modifier = modifier) {
+    Surface(onClick = onToggle, color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.extraLarge, modifier = modifier) {
         Column(Modifier.padding(Space.L)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
-                    Text(debtor.name.first().toString(), style = MaterialTheme.typography.titleMedium)
+                ShapeBadge(LedgerShapes.Person, MaterialTheme.colorScheme.secondaryContainer, size = 44.dp) {
+                    Text(debtor.name.first().toString(), style = MaterialTheme.typography.titleMediumEmphasized, color = MaterialTheme.colorScheme.onSecondaryContainer)
                 }
                 Spacer(Modifier.width(Space.M))
                 Column(Modifier.weight(1f)) {
@@ -143,7 +150,7 @@ private fun DebtorCard(
                     Row(Modifier.fillMaxWidth().padding(top = Space.S), horizontalArrangement = Arrangement.End) {
                         TextButton(onClick = onWriteOff) { Text("Write off", color = MaterialTheme.colorScheme.error) }
                         Spacer(Modifier.width(Space.XS))
-                        FilledTonalButton(onClick = onRepaid) { Text("Mark repaid") }
+                        FilledTonalButton(onClick = onRepaid, shapes = ButtonDefaults.shapes()) { Text("Mark repaid") }
                     }
                 }
             }

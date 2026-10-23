@@ -28,6 +28,10 @@ class DemoStore {
     var lentReminder by mutableStateOf(true)
     /** null = follow the system theme. */
     var darkOverride by mutableStateOf<Boolean?>(null)
+    /** Material You wallpaper colours (Android 12+). */
+    var dynamicColor by mutableStateOf(true)
+    /** Set by the "Add expense" launcher shortcut / widget; the shell opens the Add sheet and clears it. */
+    var pendingAdd by mutableStateOf(false)
 
     val categories: List<Category> = SampleData.categories
     val transactions = mutableStateListOf<Tx>()

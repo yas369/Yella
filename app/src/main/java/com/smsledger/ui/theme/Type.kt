@@ -5,41 +5,21 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-private val Base = Typography()
-
-internal val LedgerTypography = Typography(
-    displayLarge = Base.displayLarge.copy(fontWeight = FontWeight.Medium),
-    headlineLarge = Base.headlineLarge.copy(fontWeight = FontWeight.Medium, letterSpacing = (-0.5).sp),
-    headlineMedium = Base.headlineMedium.copy(fontWeight = FontWeight.Medium, letterSpacing = (-0.25).sp),
-    headlineSmall = Base.headlineSmall.copy(fontWeight = FontWeight.Medium),
-    titleLarge = Base.titleLarge.copy(fontWeight = FontWeight.Medium),
-    titleMedium = Base.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-    titleSmall = Base.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-    labelLarge = Base.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-)
+/** Material 3 Expressive type scale (includes the *Emphasized styles). */
+internal val LedgerTypography = Typography()
 
 /** Tabular figures so amounts don't shift width as they change. */
 private const val TABULAR = "tnum"
 
+/** Money styles derived from the expressive scale, always with tabular figures. */
 object MoneyStyles {
-    val Hero = TextStyle(
-        fontSize = 72.sp,
-        lineHeight = 76.sp,
-        fontWeight = FontWeight.Medium,
+    val Hero = LedgerTypography.displayLargeEmphasized.copy(
+        fontSize = 80.sp,
+        fontWeight = FontWeight.SemiBold,
+        lineHeight = 84.sp,
         letterSpacing = (-2).sp,
         fontFeatureSettings = TABULAR,
     )
-    val Large = TextStyle(
-        fontSize = 40.sp,
-        lineHeight = 44.sp,
-        fontWeight = FontWeight.Medium,
-        letterSpacing = (-1).sp,
-        fontFeatureSettings = TABULAR,
-    )
-    val Row = TextStyle(
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
-        fontWeight = FontWeight.Medium,
-        fontFeatureSettings = TABULAR,
-    )
+    val Large = LedgerTypography.displaySmallEmphasized.copy(fontFeatureSettings = TABULAR)
+    val Row: TextStyle = LedgerTypography.titleMediumEmphasized.copy(fontFeatureSettings = TABULAR)
 }

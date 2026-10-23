@@ -29,53 +29,52 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.smsledger.core.money.formatRupees
+import com.smsledger.ui.components.LedgerShapes
+import com.smsledger.ui.components.ShapeBadge
 import com.smsledger.ui.theme.Space
 
 @Composable
 internal fun NeedsBanner(count: Int, summary: String, onClick: () -> Unit) {
-    Surface(onClick = onClick, color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = MaterialTheme.shapes.large) {
+    Surface(onClick = onClick, color = MaterialTheme.colorScheme.tertiaryContainer, shape = MaterialTheme.shapes.extraLarge) {
         Row(Modifier.padding(Space.L), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.size(36.dp).clip(CircleShape).background(MaterialTheme.colorScheme.tertiary),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("$count", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onTertiary)
+            // Expressive cookie shape makes the count read as a badge, not a button.
+            ShapeBadge(LedgerShapes.Count, MaterialTheme.colorScheme.onTertiaryContainer, size = 44.dp) {
+                Text("$count", style = MaterialTheme.typography.titleMediumEmphasized, color = MaterialTheme.colorScheme.tertiaryContainer)
             }
             Spacer(Modifier.width(Space.M))
             Column(Modifier.weight(1f)) {
-                Text(if (count == 1) "1 thing needs you" else "$count things need you", style = MaterialTheme.typography.titleMedium)
-                Text(summary, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    if (count == 1) "1 thing needs you" else "$count things need you",
+                    style = MaterialTheme.typography.titleMediumEmphasized,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+                Text(summary, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onTertiaryContainer)
             }
-            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null)
+            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
         }
     }
 }
 
 @Composable
 internal fun AlertsCard(onTurnOn: () -> Unit, onDismiss: () -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.tertiaryContainer, shape = MaterialTheme.shapes.large) {
+    Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.extraLarge) {
         Column(Modifier.padding(start = Space.L, end = Space.S, top = Space.L, bottom = Space.S)) {
             Row(verticalAlignment = Alignment.Top) {
-                Icon(Icons.Outlined.NotificationsActive, contentDescription = null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
+                Icon(Icons.Outlined.NotificationsActive, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
                 Spacer(Modifier.width(Space.M))
                 Column(Modifier.weight(1f).padding(end = Space.S)) {
-                    Text("Get a heads-up before you overspend", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                    Text("Get a heads-up before you overspend", style = MaterialTheme.typography.titleMediumEmphasized, color = MaterialTheme.colorScheme.onSecondaryContainer)
                     Text(
                         "One alert at 80% and one at 100% of your limit. Never more than that.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
                     )
                 }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                // Buttons take the card's own ink so they belong to the ochre surface in both themes.
-                val ink = MaterialTheme.colorScheme.onTertiaryContainer
-                TextButton(onClick = onDismiss, colors = ButtonDefaults.textButtonColors(contentColor = ink)) { Text("Not now") }
+                TextButton(onClick = onDismiss, shapes = ButtonDefaults.shapes()) { Text("Not now") }
                 Spacer(Modifier.width(Space.XS))
-                Button(
-                    onClick = onTurnOn,
-                    colors = ButtonDefaults.buttonColors(containerColor = ink, contentColor = MaterialTheme.colorScheme.tertiaryContainer),
-                ) { Text("Turn on") }
+                Button(onClick = onTurnOn, shapes = ButtonDefaults.shapes()) { Text("Turn on") }
             }
         }
     }
@@ -83,12 +82,12 @@ internal fun AlertsCard(onTurnOn: () -> Unit, onDismiss: () -> Unit) {
 
 @Composable
 internal fun OwedCard(owedPaise: Long, people: Int, onClick: () -> Unit) {
-    Surface(onClick = onClick, color = MaterialTheme.colorScheme.surfaceContainerLow, shape = MaterialTheme.shapes.large) {
+    Surface(onClick = onClick, color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.extraLarge) {
         Row(Modifier.padding(Space.L), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.Handshake, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.width(Space.M))
             Column(Modifier.weight(1f)) {
-                Text("${formatRupees(owedPaise)} owed to you", style = MaterialTheme.typography.titleMedium)
+                Text("${formatRupees(owedPaise)} owed to you", style = MaterialTheme.typography.titleMediumEmphasized)
                 Text(
                     if (people == 1) "by 1 person" else "by $people people",
                     style = MaterialTheme.typography.bodyMedium,

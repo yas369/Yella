@@ -2,7 +2,6 @@ package com.smsledger.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -47,7 +46,9 @@ fun LimitHero(status: LimitStatus, spentPaise: Long, limitPaise: Long, modifier:
     val amount = if (over) status.overPaise else status.remainingPaise
     val label = if (over) "over limit" else "left today"
     val amountColor by animateColorAsState(
-        if (over) LedgerTheme.colors.over else MaterialTheme.colorScheme.onSurface, label = "heroColor",
+        if (over) LedgerTheme.colors.over else MaterialTheme.colorScheme.onSurface,
+        MaterialTheme.motionScheme.defaultEffectsSpec(),
+        label = "heroColor",
     )
     val spokenAmount = formatRupeesWhole(amount).removePrefix("₹").replace(",", "")
 
@@ -55,14 +56,14 @@ fun LimitHero(status: LimitStatus, spentPaise: Long, limitPaise: Long, modifier:
         Text(heroAmount(amount, MaterialTheme.colorScheme.onSurfaceVariant), style = MoneyStyles.Hero, color = amountColor)
         Text(
             label,
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.titleLargeEmphasized,
             color = if (over) LedgerTheme.colors.over else MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(Space.XL))
         DayMeter(status.fraction, status.level)
         Spacer(Modifier.height(Space.S))
         Row(Modifier.fillMaxWidth()) {
-            val pct = (spentPaise * 100 / limitPaise)
+            val pct = spentPaise * 100 / limitPaise
             Text(
                 if (status.level == LimitLevel.Ok) "${formatRupeesWhole(spentPaise)} spent" else "${formatRupeesWhole(spentPaise)} spent · $pct%",
                 style = MaterialTheme.typography.bodyMedium,
@@ -80,26 +81,49 @@ fun LimitHero(status: LimitStatus, spentPaise: Long, limitPaise: Long, modifier:
 
 /** "₹" set smaller and quieter than the digits, so the number itself carries the weight. */
 private fun heroAmount(paise: Long, symbolColor: Color) = buildAnnotatedString {
-    withStyle(SpanStyle(fontSize = 40.sp, color = symbolColor, letterSpacing = 0.sp)) { append("₹") }
+    withStyle(SpanStyle(fontSize = 44.sp, color = symbolColor, letterSpacing = 0.sp)) { append("₹") }
     append(formatRupeesWhole(paise).removePrefix("₹"))
 }
 
-/** Thick track with a notch at 80%; fill shifts green → amber → red. */
+/** One drawn piece of the meter, in fractions of its width. */
+data class MeterSegment(val start: Float, val end: Float, val active: Boolean)
+
+/**
+ * Splits the meter into Expressive-style pieces: the fill, a [gap], the remaining track, and a [gap]
+ * at the [notch] (80%) cutting through whichever piece crosses it. Empty pieces are dropped.
+ */
+fun meterSegments(progress: Float, notch: Float, gap: Float): List<MeterSegment> {
+    val p = progress.coerceIn(0f, 1f)
+    fun split(start: Float, end: Float, active: Boolean): List<MeterSegment> =
+        if (notch > start && notch < end) {
+            listOf(MeterSegment(start, notch - gap / 2, active), MeterSegment(notch + gap / 2, end, active))
+        } else {
+            listOf(MeterSegment(start, end, active))
+        }
+    val fill = if (p > 0f) split(0f, p, active = true) else emptyList()
+    val trackStart = if (p > 0f) p + gap else 0f
+    val track = if (p < 1f) split(trackStart, 1f, active = false) else emptyList()
+    return (fill + track).filter { it.end > it.start }
+}
+
+/** Thick track, gap between fill and track, a gap at 80%, and a stop dot; fill shifts green → amber → red. */
 @Composable
 fun DayMeter(fraction: Float, level: LimitLevel, modifier: Modifier = Modifier) {
-    val fill by animateColorAsState(levelColor(level), label = "meterColor")
-    val progress by animateFloatAsState(fraction, tween(600), label = "meterFill")
-    val track = LedgerTheme.colors.meterTrack
-    val notch = MaterialTheme.colorScheme.surface
+    val fill by animateColorAsState(levelColor(level), MaterialTheme.motionScheme.defaultEffectsSpec(), label = "meterColor")
+    val progress by animateFloatAsState(fraction, MaterialTheme.motionScheme.slowSpatialSpec(), label = "meterFill")
+    val track = MaterialTheme.colorScheme.secondaryContainer
 
-    Canvas(modifier.fillMaxWidth().height(14.dp)) {
+    Canvas(modifier.fillMaxWidth().height(16.dp)) {
+        val gapPx = 4.dp.toPx()
         val radius = CornerRadius(size.height / 2)
-        drawRoundRect(track, cornerRadius = radius)
-        if (progress > 0f) {
-            val width = (size.width * progress).coerceAtLeast(size.height)
-            drawRoundRect(fill, size = Size(width, size.height), cornerRadius = radius)
+        meterSegments(progress, WARNING_FRACTION.toFloat(), gapPx / size.width).forEach { segment ->
+            val x = size.width * segment.start
+            val width = (size.width * (segment.end - segment.start)).coerceAtLeast(if (segment.active) size.height else 1f)
+            drawRoundRect(if (segment.active) fill else track, Offset(x, 0f), Size(width, size.height), radius)
         }
-        val x = size.width * WARNING_FRACTION.toFloat()
-        drawLine(notch, Offset(x, 0f), Offset(x, size.height), strokeWidth = 3.dp.toPx())
+        if (progress < 1f) {
+            val dot = size.height / 4
+            drawCircle(fill, dot, Offset(size.width - size.height / 2, size.height / 2))
+        }
     }
 }

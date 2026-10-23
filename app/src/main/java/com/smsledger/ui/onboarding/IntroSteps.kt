@@ -39,6 +39,8 @@ import com.smsledger.core.money.AmountInput
 import com.smsledger.core.money.formatRupees
 import com.smsledger.ui.components.AmountReadout
 import com.smsledger.ui.components.BigChoice
+import com.smsledger.ui.components.LedgerShapes
+import com.smsledger.ui.components.ShapeBadge
 import com.smsledger.ui.components.Emphasis
 import com.smsledger.ui.components.LimitHero
 import com.smsledger.ui.components.NumberPad
@@ -53,7 +55,7 @@ internal fun WelcomeStep(onStart: () -> Unit) {
             LimitHero(limitStatus(16_000, 50_000), 16_000, 50_000, Modifier.padding(Space.XL))
         }
         Spacer(Modifier.height(Space.XXL))
-        Text("Know what you can spend today", style = MaterialTheme.typography.headlineLarge)
+        Text("Know what you can spend today", style = MaterialTheme.typography.headlineLargeEmphasized)
         Spacer(Modifier.height(Space.M))
         Text(
             "SMS Ledger reads your bank messages and keeps the ledger for you. Nothing leaves this phone.",
@@ -71,7 +73,7 @@ internal fun LimitStep(initialPaise: Long, onContinue: (Long) -> Unit) {
     var text by rememberSaveable { mutableStateOf((initialPaise / 100).toString()) }
     val paise = AmountInput.toPaise(text)
     OnboardingFrame(actions = { BigChoice("Continue", { onContinue(paise) }, emphasis = Emphasis.Primary, enabled = paise > 0) }) {
-        Text("Set a daily limit", style = MaterialTheme.typography.headlineMedium)
+        Text("Set a daily limit", style = MaterialTheme.typography.headlineMediumEmphasized)
         Spacer(Modifier.height(Space.S))
         Text(
             "Each day counts down from this. Rent and bills can be left out later.",
@@ -109,7 +111,7 @@ internal fun DisclosureStep(onAllow: () -> Unit, onManual: () -> Unit) {
         Spacer(Modifier.height(Space.XXL))
         IconBadge(Icons.Outlined.Sms)
         Spacer(Modifier.height(Space.XL))
-        Text("Let SMS Ledger read your bank messages", style = MaterialTheme.typography.headlineMedium)
+        Text("Let SMS Ledger read your bank messages", style = MaterialTheme.typography.headlineMediumEmphasized)
         Spacer(Modifier.height(Space.S))
         Text(
             "This is how spending gets tracked automatically.",
@@ -138,7 +140,7 @@ internal fun ManualStep(onContinue: () -> Unit, onAllow: () -> Unit) {
         Spacer(Modifier.weight(1f))
         IconBadge(Icons.Outlined.EditNote)
         Spacer(Modifier.height(Space.XL))
-        Text("You'll add expenses yourself", style = MaterialTheme.typography.headlineMedium)
+        Text("You'll add expenses yourself", style = MaterialTheme.typography.headlineMediumEmphasized)
         Spacer(Modifier.height(Space.S))
         Text(
             "Your daily limit, history and categories all work the same. Turn on automatic reading any time in Settings.",
@@ -151,11 +153,8 @@ internal fun ManualStep(onContinue: () -> Unit, onAllow: () -> Unit) {
 
 @Composable
 internal fun IconBadge(icon: ImageVector) {
-    Box(
-        Modifier.size(56.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+    ShapeBadge(LedgerShapes.Info, MaterialTheme.colorScheme.primaryContainer, size = 72.dp) {
+        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(32.dp))
     }
 }
 

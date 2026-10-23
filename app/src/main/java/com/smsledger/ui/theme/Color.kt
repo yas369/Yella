@@ -82,21 +82,22 @@ data class LedgerColors(
     val credit: Color,
     val warning: Color,
     val over: Color,
-    val meterTrack: Color,
 )
 
+/**
+ * Status colours are fixed, never taken from the wallpaper: "amber = 80%, red = over" must mean the
+ * same thing on every phone (flows.md §0). Tuned to stay legible on dynamic-colour surfaces.
+ */
 internal val LightLedgerColors = LedgerColors(
-    credit = Color(0xFF237A5A),
-    warning = Color(0xFFB86E00),
-    over = Color(0xFFB3392B),
-    meterTrack = Color(0xFFE3DED3),
+    credit = Color(0xFF1F7A55),
+    warning = Color(0xFFB06500),
+    over = Color(0xFFBA1A1A),
 )
 
 internal val DarkLedgerColors = LedgerColors(
-    credit = Color(0xFF8ED1B5),
-    warning = Color(0xFFF0B45A),
-    over = Color(0xFFF1A497),
-    meterTrack = Color(0xFF2E312D),
+    credit = Color(0xFF7FD8AE),
+    warning = Color(0xFFFFB95C),
+    over = Color(0xFFFFB4AB),
 )
 
 val LocalLedgerColors = staticCompositionLocalOf { LightLedgerColors }

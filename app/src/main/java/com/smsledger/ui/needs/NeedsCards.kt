@@ -43,7 +43,7 @@ internal fun NeedsCard(
     onResolve: (NeedsItem, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceContainerLow, shape = MaterialTheme.shapes.large) {
+    Surface(modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.extraLarge) {
         Column(Modifier.padding(Space.L), verticalArrangement = Arrangement.spacedBy(Space.M)) {
             when (item) {
                 is NeedsItem.Unreadable -> {
@@ -92,13 +92,13 @@ internal fun NeedsCard(
 
 @Composable
 private fun Kind(text: String) {
-    Text(text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.tertiary)
+    Text(text, style = MaterialTheme.typography.labelLargeEmphasized, color = MaterialTheme.colorScheme.tertiary)
 }
 
 @Composable
 private fun Title(title: String, subtitle: String) {
     Column {
-        Text(title, style = MaterialTheme.typography.titleLarge)
+        Text(title, style = MaterialTheme.typography.titleLargeEmphasized)
         Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

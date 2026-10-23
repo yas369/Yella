@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import com.smsledger.core.money.AmountInput
 import com.smsledger.core.money.formatRupees
 import com.smsledger.ui.components.BigChoice
+import com.smsledger.ui.components.ConnectedChoice
 import com.smsledger.ui.components.Emphasis
 import com.smsledger.ui.model.NeedsItem
 import com.smsledger.ui.theme.MoneyStyles
@@ -73,8 +74,13 @@ fun TeachSheet(
                         0 -> {
                             Text("Is this money going out or coming in?", style = MaterialTheme.typography.titleLarge)
                             Spacer(Modifier.height(Space.XS))
-                            BigChoice("Money out", { direction = "out" }, icon = Icons.AutoMirrored.Outlined.CallMade)
-                            BigChoice("Money in", { direction = "in" }, icon = Icons.AutoMirrored.Outlined.CallReceived)
+                            ConnectedChoice(
+                                options = listOf("Money out", "Money in"),
+                                selectedIndex = null,
+                                onSelect = { direction = if (it == 0) "out" else "in" },
+                                icons = listOf(Icons.AutoMirrored.Outlined.CallMade, Icons.AutoMirrored.Outlined.CallReceived),
+                                modifier = Modifier.height(56.dp),
+                            )
                             BigChoice("Neither, ignore messages like this", onIgnoreLikeThis, emphasis = Emphasis.Outline, icon = Icons.Outlined.Block)
                         }
                         1 -> {

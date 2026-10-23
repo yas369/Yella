@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Matches the Compose background so there is no white flash on launch. -->
+    <!-- Matches the Compose background so there is no flash on launch. -->
     <color name="window_background">#FFF7F5F0</color>
+    <color name="ic_launcher_background">#FF1E5B4A</color>
 </resources>

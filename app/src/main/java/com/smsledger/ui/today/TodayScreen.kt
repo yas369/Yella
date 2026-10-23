@@ -10,7 +10,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
@@ -61,10 +65,13 @@ fun TodayScreen(
     onAlertsTurnOn: () -> Unit,
     onAlertsDismiss: () -> Unit,
     onTxClick: (Tx) -> Unit,
+    listState: LazyListState,
     contentPadding: PaddingValues,
 ) {
     val today = LocalDate.now()
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
+    // No top app bar: the hero is the title. The list scrolls under the status bar (edge-to-edge).
+    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = contentPadding) {
+        item(key = "statusBar") { Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars)) }
         item(key = "date") {
             Text(
                 today.format(DateTimeFormatter.ofPattern("EEEE, d MMMM")),
