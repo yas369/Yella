@@ -37,4 +37,12 @@ class FormatRupeesTest {
     fun `negative amounts put the sign before the rupee symbol`() {
         assertEquals("-₹1,500.25", formatRupees(-150_025))
     }
+
+    @Test
+    fun `whole-rupee format rounds totals to the nearest rupee`() {
+        assertEquals("₹24,997", formatRupeesWhole(2_499_650))
+        assertEquals("₹3,041", formatRupeesWhole(304_149))
+        assertEquals("₹500", formatRupeesWhole(50_000))
+        assertEquals("-₹2", formatRupeesWhole(-150))
+    }
 }

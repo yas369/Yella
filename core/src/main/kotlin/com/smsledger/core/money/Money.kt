@@ -14,6 +14,12 @@ fun formatRupees(paise: Long): String {
     return if (fraction == 0L) "$sign₹$rupees" else "$sign₹$rupees.${fraction.toString().padStart(2, '0')}"
 }
 
+/** For totals and summaries: rounds to the nearest rupee (half away from zero). Single transactions use [formatRupees]. */
+fun formatRupeesWhole(paise: Long): String {
+    val rounded = (paise.absoluteValue + 50) / 100 * 100
+    return formatRupees(if (paise < 0) -rounded else rounded)
+}
+
 private fun groupIndian(digits: String): String {
     if (digits.length <= 3) return digits
     val head = digits.dropLast(3)
