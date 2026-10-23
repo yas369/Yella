@@ -409,3 +409,26 @@ Plan and rationale: [`tasks/plan.md`](plan.md). Spec section numbers are written
 ### Checkpoint G: Ready for Play review
 - [ ] All tasks checked, all tests pass
 - [ ] Human submits for production review
+
+---
+
+## Added by the Android / Material 3 Expressive redesign (docs/flows.md §12, §15)
+
+### T27: Home-screen widget, launcher shortcut: real data and day rollover
+**Description:** The widget, the "Add expense" shortcut and the themed icon are built on preview data (`WidgetSnapshot` published by the app). Wire the snapshot to the Room-backed daily summary (T7), and refresh at local midnight with a WorkManager job, so the widget never shows yesterday's numbers.
+**Acceptance criteria:**
+- [ ] The widget updates within seconds of a new transaction (manual or SMS) without opening the app
+- [ ] At local midnight the widget resets to the full limit
+- [ ] Widget + and the launcher shortcut open the Add sheet; if onboarding isn't finished, onboarding comes first
+**Verification:**
+- [ ] `WidgetSnapshotTest` passes; manual check on the emulator across a simulated midnight
+**Dependencies:** T7, T12
+**Files:** `app/.../widget/*`, `app/.../work/MidnightWorker.kt`
+**Scope:** S
+
+### T28: Large screens (after v0)
+**Description:** Wide navigation rail at ≥ 600dp; list-detail History at ≥ 840dp (detail pane instead of the edit sheet).
+**Acceptance criteria:**
+- [ ] Tablet and foldable emulators show the rail and list-detail without clipped content
+**Dependencies:** T22
+**Scope:** M

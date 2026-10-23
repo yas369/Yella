@@ -17,7 +17,7 @@ The project folder is empty, so this is a greenfield build. The plan goes after 
    - `app/`: Android code only, meaning Room, the SMS reader and receiver, WorkManager, notifications and Compose UI. It holds no business logic.
 2. **Raw SMS are kept unchanged. The ledger is derived from them plus user decisions.** Store raw messages (id, sender, body, timestamp) once. Keep everything the user decides (account Mine/Not mine, templates, payee categories, per-transaction overrides, merges, pairings, lent marks) as separate rows. The transactions shown are computed from raw messages plus decisions. This makes the requirements "every decision is undoable" (§7, §8, §10) and "All like this" (§10) easy to meet: undo deletes the decision row and recomputes. It also lets us re-parse when the parser improves.
 3. **Parsing order: learned template, then built-in regex, then "Couldn't read".** Nothing from a confirmed bank or wallet sender is dropped silently (§7). Template keys are the **full** normalised template.
-4. **Stack:** Kotlin, Jetpack Compose with Material 3, Room, WorkManager, kotlinx-coroutines and Flow. Use manual constructor injection through one `AppContainer`. Hilt is not worth it at this size; we can add it later if needed. Money is stored as `Long` paise, never as floating point.
+4. **Stack:** Kotlin, Jetpack Compose with **Material 3 Expressive** (`material3` 1.5.0-beta02, pinned) and dynamic colour, Glance for the widget, Room, WorkManager, kotlinx-coroutines and Flow. Use manual constructor injection through one `AppContainer`. Hilt is not worth it at this size; we can add it later if needed. Money is stored as `Long` paise, never as floating point.
 5. **Large-inbox import runs as a WorkManager job with progress shown.** It streams messages through a cursor in batches, so the first launch never blocks the UI.
 6. **Privacy for test data.** The SMS export is **never committed**. Unit-test fixtures are hand-redacted samples (digits, names, VPAs and reference numbers replaced) kept in `core/src/test/resources/fixtures/`. The corpus tool reads the export from a path passed on the command line.
 
@@ -100,6 +100,9 @@ Gradle skeleton (T1)
 ### Phase 7: Release
 - [ ] T25: Privacy policy, Data Safety form, final permissions declaration, demo video
 - [ ] T26: Release build, internal testing track, pre-launch report
+
+- [ ] T27: Widget + launcher shortcut on real data, with midnight refresh
+- [ ] T28: Large screens (navigation rail, list-detail History). After v0
 
 ### Checkpoint G: Ready for Play review
 
