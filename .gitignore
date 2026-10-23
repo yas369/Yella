@@ -1,0 +1,18 @@
+# Gradle / build
+.gradle/
+.kotlin/
+build/
+local.properties
+
+# IDE
+.idea/
+*.iml
+captures/
+
+# Outputs
+*.apk
+*.aab
+
+# SMS corpus exports: never commit real messages
+data/
+*.sms.xml
