@@ -8,18 +8,28 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.smsledger.data.LedgerStore
 import com.smsledger.ui.theme.LedgerTheme
 import com.smsledger.ui.theme.Space
 
 /**
- * First run. Manual mode only for now: the one question is the daily limit. The SMS permission
- * explanation and account confirmation (design.md §7) arrive with SMS capture.
+ * First run (design.md §7): 1. SMS explanation before the system prompt, 2. account confirmation,
+ * 3. daily limit. Declining SMS access skips straight to the limit; manual mode works the same.
  */
 @Composable
-fun OnboardingFlow(initialLimitPaise: Long, onFinish: (limitPaise: Long) -> Unit) {
+fun OnboardingFlow(store: LedgerStore, onFinish: (limitPaise: Long) -> Unit) {
+    var captureDone by rememberSaveable { mutableStateOf(false) }
     Surface(Modifier.fillMaxSize(), color = LedgerTheme.colors.bg) {
-        LimitStep(initialLimitPaise, onContinue = onFinish)
+        if (!captureDone) {
+            CaptureSetupFlow(store, onFinished = { captureDone = true })
+        } else {
+            LimitStep(store.limitPaise, onContinue = onFinish)
+        }
     }
 }
 

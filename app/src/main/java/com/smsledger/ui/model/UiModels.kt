@@ -24,6 +24,10 @@ data class Tx(
     val note: String = "",
     /** Marked "not a transaction" (§10): stays in history, never counted. */
     val excluded: Boolean = false,
+    /** Account key (`HDFCBK|4821`) for SMS-backed rows; null for manual entries. */
+    val accountKey: String? = null,
+    /** UPI reference from the SMS, used to match merchant labels (§8). */
+    val upiRef: String? = null,
 ) {
     val date: LocalDate get() = at.toLocalDate()
 
@@ -55,11 +59,14 @@ sealed interface NeedsItem {
         override val id: Long,
         val sender: String,
         val body: String,
+        /** Account label, or the sender when the digits don't resolve. */
         val account: String,
         val payee: String,
-        val daysAgo: Int,
+        val at: LocalDateTime,
+        val accountKey: String? = null,
     ) : NeedsItem {
         override val sms: String get() = body
+        val daysAgo: Int get() = ChronoUnit.DAYS.between(at.toLocalDate(), LocalDate.now()).toInt()
     }
 
     /** 3-digit mask that fits more than one known account (§4). Picking one adds the transaction. */
@@ -67,11 +74,29 @@ sealed interface NeedsItem {
         override val id: Long,
         val prompt: String,
         val amountPaise: Long,
-        val daysAgo: Int,
+        val at: LocalDateTime,
         val payee: String,
+        /** Labels shown on the buttons ("HDFC ••4821"), in the same order as [optionKeys]. */
         val options: List<String>,
         override val sms: String,
-    ) : NeedsItem
+        val optionKeys: List<String> = emptyList(),
+        val moneyIn: Boolean = false,
+        val upiRef: String? = null,
+    ) : NeedsItem {
+        val daysAgo: Int get() = ChronoUnit.DAYS.between(at.toLocalDate(), LocalDate.now()).toInt()
+    }
+
+    /** Unknown digits at a known bank, or an unconfirmed wallet (§4): Mine / Not mine, then the SMS is read. */
+    data class NewAccount(
+        override val id: Long,
+        val accountKey: String,
+        val label: String,
+        val sender: String,
+        val body: String,
+        val at: LocalDateTime,
+    ) : NeedsItem {
+        override val sms: String get() = body
+    }
 
     /** Debit + credit between own accounts, amounts within fee tolerance (§9). Both rows exist already. */
     data class PossibleTransfer(

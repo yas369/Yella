@@ -21,7 +21,7 @@ private class MemoryDisk : LedgerDisk {
         val rows = data.transactions.associateBy { it.id }.toMutableMap()
         changed.forEach { rows[it.id] = it }
         deleted.forEach { rows.remove(it) }
-        data = LedgerData(rows.values.toList(), after.lentBook, after.payeeRules)
+        data = LedgerData(rows.values.toList(), after.lentBook, after.payeeRules, after.sms)
     }
 
     override fun savePrefs(prefs: Prefs) {

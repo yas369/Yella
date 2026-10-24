@@ -55,7 +55,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import com.smsledger.core.limit.limitStatus
 import com.smsledger.data.LedgerStore
+import com.smsledger.ui.onboarding.CaptureSetupFlow
 import com.smsledger.ui.onboarding.OnboardingFlow
+import com.smsledger.ui.settings.AccountsScreen
+import com.smsledger.ui.settings.TemplatesScreen
 import com.smsledger.widget.WidgetSnapshot
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -68,7 +71,7 @@ enum class Tab(val label: String, val icon: ImageVector, val selectedIcon: Image
     Settings("Settings", Icons.Outlined.Settings, Icons.Filled.Settings),
 }
 
-enum class Overlay { None, Needs, Owed }
+enum class Overlay { None, Needs, Owed, Capture, Accounts, Templates }
 
 /** How long Undo stays on screen after a decision or edit (design.md §6). */
 private const val UNDO_MS = 5_000L
@@ -95,7 +98,7 @@ class Notifier(private val host: SnackbarHostState, private val scope: Coroutine
 @Composable
 fun SmsLedgerApp(store: LedgerStore) {
     if (!store.onboarded) {
-        OnboardingFlow(store.limitPaise, onFinish = store::finishOnboarding)
+        OnboardingFlow(store, onFinish = store::finishOnboarding)
         return
     }
 
@@ -123,6 +126,11 @@ fun SmsLedgerApp(store: LedgerStore) {
         WidgetSnapshot.publish(context, limitStatus(spent, store.limitPaise), spent, store.limitPaise)
     }
 
+    // A new account confirmed as mine: read its past messages now (§4).
+    LaunchedEffect(store.rescanFromMillis) {
+        if (store.rescanFromMillis != null) (context.applicationContext as com.smsledger.SmsLedgerApplication).catchUp()
+    }
+
     BackHandler(enabled = overlay != Overlay.None) { overlay = Overlay.None }
     BackHandler(enabled = overlay == Overlay.None && tab != Tab.Today) { tab = Tab.Today }
 
@@ -136,6 +144,15 @@ fun SmsLedgerApp(store: LedgerStore) {
         },
         label = "overlay",
     ) { shown -> when (shown) {
+        Overlay.Capture -> CaptureSetupFlow(store, onFinished = { overlay = Overlay.None })
+        Overlay.Accounts -> Box(Modifier.fillMaxSize()) {
+            AccountsScreen(store.accounts, onBack = { overlay = Overlay.None }) { account, mine -> store.act(notifier) { setAccountMine(account, mine) } }
+            SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
+        }
+        Overlay.Templates -> Box(Modifier.fillMaxSize()) {
+            TemplatesScreen(store.templates.values.toList(), onBack = { overlay = Overlay.None }) { key -> store.act(notifier) { forgetTemplate(key) } }
+            SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
+        }
         Overlay.Needs, Overlay.Owed -> Box(Modifier.fillMaxSize()) {
             if (shown == Overlay.Needs) {
                 NeedsRoute(store, notifier, sheets, onBack = { overlay = Overlay.None })
@@ -166,7 +183,7 @@ fun SmsLedgerApp(store: LedgerStore) {
             when (tab) {
                 Tab.Today -> TodayRoute(store, sheets, todayList, padding, onOpen = { overlay = it }, onHistory = { tab = Tab.History })
                 Tab.History -> HistoryRoute(store, sheets, padding)
-                Tab.Settings -> SettingsRoute(store, notifier, sheets, padding, onOpenOwed = { overlay = Overlay.Owed })
+                Tab.Settings -> SettingsRoute(store, notifier, sheets, padding, onOpen = { overlay = it })
             }
         }
     } }

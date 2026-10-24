@@ -52,6 +52,8 @@ data class TodayState(
     val recent: List<Tx>,
     val needsCount: Int,
     val monthSpentPaise: Long,
+    /** Manual mode or SMS access revoked: Home shows one "Turn on" row (design.md §9). */
+    val captureOff: Boolean = false,
 )
 
 /**
@@ -67,6 +69,7 @@ fun TodayScreen(
     onTxClick: (Tx) -> Unit,
     listState: LazyListState,
     contentPadding: PaddingValues,
+    onTurnOnCapture: () -> Unit = {},
 ) {
     val today = LocalDate.now()
     val c = LedgerTheme.colors
@@ -103,6 +106,21 @@ fun TodayScreen(
                 }
             }
         }
+        if (state.captureOff) {
+            item(key = "captureOff") {
+                RowDivider()
+                Text(
+                    "Automatic capture is off · Turn on",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = c.accent,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onTurnOnCapture)
+                        .defaultMinSize(minHeight = Size.Row)
+                        .padding(horizontal = Space.Gutter, vertical = Space.L),
+                )
+            }
+        }
         item(key = "recentHeader") {
             RowDivider()
             SectionHeader("Recent")
@@ -111,7 +129,7 @@ fun TodayScreen(
         if (recent.isEmpty()) {
             item(key = "empty") {
                 Text(
-                    "No transactions yet. Tap + to add one.",
+                    if (state.captureOff) "No transactions yet. Tap + to add one." else "No transactions yet. They'll appear here as bank SMS arrive.",
                     style = MaterialTheme.typography.bodyLarge,
                     color = c.textSecondary,
                     modifier = Modifier.padding(horizontal = Space.Gutter, vertical = Space.S),

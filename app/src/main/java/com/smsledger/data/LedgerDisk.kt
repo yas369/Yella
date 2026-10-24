@@ -5,6 +5,10 @@ import com.smsledger.core.ledger.Debt
 import com.smsledger.core.ledger.LentBook
 import com.smsledger.core.ledger.LentEvent
 import com.smsledger.core.ledger.LentEventKind
+import com.smsledger.core.sms.Account
+import com.smsledger.core.sms.LearnedTemplate
+import com.smsledger.core.sms.SenderKind
+import com.smsledger.ui.model.NeedsItem
 import com.smsledger.ui.model.Tx
 import com.smsledger.ui.model.TxKind
 import kotlinx.coroutines.CoroutineScope
@@ -16,11 +20,29 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 
-/** What is saved: the user's own entries, lent history and payee rules. Nothing else. */
+/** What is saved: the user's own entries, lent history, payee rules and SMS capture state. */
 data class LedgerData(
     val transactions: List<Tx> = emptyList(),
     val lentBook: LentBook = LentBook(),
     val payeeRules: Map<String, String> = emptyMap(),
+    val sms: SmsData = SmsData(),
+)
+
+/** A discovered account and the user's answer (§4). */
+data class AccountState(val account: Account, val mine: Boolean)
+
+/** A learned "Couldn't read" answer and the message it came from (§7). */
+data class TemplateRecord(val template: LearnedTemplate, val example: String)
+
+/**
+ * SMS capture state (§3–§7). Only confirmed bank and wallet messages are ever kept, inside
+ * transactions and To-review items; discovery reads everything else in memory only.
+ */
+data class SmsData(
+    val accounts: List<AccountState> = emptyList(),
+    val senders: Map<String, SenderKind> = emptyMap(),
+    val templates: Map<String, TemplateRecord> = emptyMap(),
+    val needs: List<NeedsItem> = emptyList(),
 )
 
 /** Small settings kept in SharedPreferences. */
@@ -29,6 +51,10 @@ data class Prefs(
     val limitPaise: Long = DEFAULT_LIMIT_PAISE,
     /** null = follow the system theme. */
     val darkOverride: Boolean? = null,
+    /** Automatic mode (§2): SMS capture on. Off until the user grants SMS access and confirms accounts. */
+    val automatic: Boolean = false,
+    /** Newest inbox message already scanned (epoch millis), for the catch-up scan. */
+    val lastScanMillis: Long = 0,
 )
 
 /** Pre-filled in the first-run limit field; the user confirms or changes it. */
@@ -37,6 +63,10 @@ const val DEFAULT_LIMIT_PAISE = 50_000L
 /** Where the ledger lives. The app uses [RoomLedgerDisk]; tests use an in-memory one. */
 interface LedgerDisk {
     suspend fun load(): Pair<LedgerData, Prefs>
+    /** Message keys already ingested, so a rescan never adds a message twice. */
+    suspend fun processedKeys(): Set<String> = emptySet()
+    /** Records ingested message keys. Append-only; kept apart from [save] so big imports stay cheap. */
+    fun markProcessed(keys: Collection<String>) {}
     /** Writes what changed between [before] and [after], in call order, off the main thread. */
     fun save(before: LedgerData, after: LedgerData)
     fun savePrefs(prefs: Prefs)
@@ -69,14 +99,32 @@ class RoomLedgerDisk(context: Context) : LedgerDisk {
                 },
             ),
             payeeRules = dao.payeeRules().associate { it.payeeKey to it.categoryId },
+            sms = SmsData(
+                accounts = dao.accounts().map { AccountState(Account(it.brand, it.digits), it.mine) },
+                senders = dao.senders().mapNotNull { row -> runCatching { row.brand to SenderKind.valueOf(row.kind) }.getOrNull() }.toMap(),
+                templates = dao.templates().associate {
+                    it.key to TemplateRecord(LearnedTemplate(it.key, it.isTransaction, it.moneyIn, it.amountIndex), it.example)
+                },
+                needs = dao.needs().mapNotNull { it.toNeed() },
+            ),
         )
         val dark = prefs.getInt(KEY_DARK, -1)
         val settings = Prefs(
             onboarded = prefs.getBoolean(KEY_ONBOARDED, false),
             limitPaise = prefs.getLong(KEY_LIMIT, DEFAULT_LIMIT_PAISE),
             darkOverride = if (dark < 0) null else dark == 1,
+            automatic = prefs.getBoolean(KEY_AUTOMATIC, false),
+            lastScanMillis = prefs.getLong(KEY_LAST_SCAN, 0),
         )
         return data to settings
+    }
+
+    override suspend fun processedKeys(): Set<String> = dao.processedKeys().toHashSet()
+
+    override fun markProcessed(keys: Collection<String>) {
+        if (keys.isEmpty()) return
+        val rows = keys.map { ProcessedSmsEntity(it) }
+        writer.launch { dao.insertProcessed(rows) }
     }
 
     override fun save(before: LedgerData, after: LedgerData) {
@@ -91,7 +139,22 @@ class RoomLedgerDisk(context: Context) : LedgerDisk {
         }
         val rules = if (before.payeeRules != after.payeeRules) after.payeeRules.map { (k, v) -> PayeeRuleEntity(k, v) } else null
         val rows = changed.map { it.toEntity() }
-        writer.launch { dao.save(rows, deleted, lent, rules) }
+        val b = before.sms
+        val a = after.sms
+        val accounts = if (b.accounts != a.accounts) a.accounts.map { AccountEntity(it.account.key, it.account.brand, it.account.digits, it.mine) } else null
+        val senders = if (b.senders != a.senders) a.senders.map { (brand, kind) -> SenderEntity(brand, kind.name) } else null
+        val templates = if (b.templates != a.templates) {
+            a.templates.values.map { TemplateEntity(it.template.key, it.template.isTransaction, it.template.moneyIn, it.template.amountIndex, it.example) }
+        } else {
+            null
+        }
+        val needs = if (b.needs != a.needs) a.needs.map { it.toEntity() } else null
+        writer.launch {
+            dao.save(rows, deleted, lent, rules)
+            if (accounts != null || senders != null || templates != null || needs != null) {
+                dao.saveSms(accounts, senders, templates, needs, emptyList())
+            }
+        }
     }
 
     override fun savePrefs(prefs: Prefs) {
@@ -99,6 +162,8 @@ class RoomLedgerDisk(context: Context) : LedgerDisk {
             .putBoolean(KEY_ONBOARDED, prefs.onboarded)
             .putLong(KEY_LIMIT, prefs.limitPaise)
             .putInt(KEY_DARK, when (prefs.darkOverride) { null -> -1; false -> 0; true -> 1 })
+            .putBoolean(KEY_AUTOMATIC, prefs.automatic)
+            .putLong(KEY_LAST_SCAN, prefs.lastScanMillis)
             .apply()
     }
 
@@ -118,7 +183,37 @@ class RoomLedgerDisk(context: Context) : LedgerDisk {
         sms = sms,
         note = note,
         excluded = excluded,
+        accountKey = accountKey,
+        upiRef = upiRef,
     )
+
+    private fun millis(at: LocalDateTime) = at.atZone(zone).toInstant().toEpochMilli()
+    private fun time(millis: Long) = LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), zone)
+
+    private fun NeedsItem.toEntity(): NeedEntity = when (this) {
+        is NeedsItem.Unreadable -> NeedEntity(id, "unreadable", sender, body, millis(at), accountKey, account, payee, 0, false, "", 0, 0, null)
+        is NeedsItem.WhichAccount -> NeedEntity(id, "which_account", prompt, sms, millis(at), null, prompt, payee, amountPaise, moneyIn, optionKeys.joinToString("\n"), 0, 0, upiRef)
+        is NeedsItem.NewAccount -> NeedEntity(id, "new_account", sender, body, millis(at), accountKey, label, "", 0, false, "", 0, 0, null)
+        is NeedsItem.PossibleTransfer -> NeedEntity(id, "transfer", "", sms, 0, null, outLine, inLine, 0, false, gap, outTxId, inTxId, null)
+        is NeedsItem.NewPayee -> NeedEntity(id, "new_payee", "", sms, 0, null, whenLabel, payee, amountPaise, false, "", txId, 0, null)
+        is NeedsItem.Bulk -> NeedEntity(id, "bulk", "", sms, 0, null, "", payee, 0, false, "", 0, 0, null)
+    }
+
+    private fun NeedEntity.toNeed(): NeedsItem? = when (type) {
+        "unreadable" -> NeedsItem.Unreadable(id, sender, body, label, payee, time(atMillis), accountKey)
+        "which_account" -> {
+            val keys = options.split('\n').filter { it.isNotEmpty() }
+            NeedsItem.WhichAccount(
+                id, label, amountPaise, time(atMillis), payee,
+                keys.map { Account.fromKey(it)?.shortLabel ?: it }, body, keys, moneyIn, upiRef,
+            )
+        }
+        "new_account" -> NeedsItem.NewAccount(id, accountKey.orEmpty(), label, sender, body, time(atMillis))
+        "transfer" -> NeedsItem.PossibleTransfer(id, txId, otherTxId, label, payee, options, body)
+        "new_payee" -> NeedsItem.NewPayee(id, txId, payee, amountPaise, label, body)
+        "bulk" -> NeedsItem.Bulk(id, payee, body)
+        else -> null
+    }
 
     private fun Tx.toEntity() = TxEntity(
         id = id,
@@ -131,9 +226,13 @@ class RoomLedgerDisk(context: Context) : LedgerDisk {
         sms = sms,
         note = note,
         excluded = excluded,
+        accountKey = accountKey,
+        upiRef = upiRef,
     )
 
     private companion object {
+        const val KEY_AUTOMATIC = "automatic"
+        const val KEY_LAST_SCAN = "last_scan_millis"
         const val KEY_ONBOARDED = "onboarded"
         const val KEY_LIMIT = "limit_paise"
         const val KEY_DARK = "dark_override"

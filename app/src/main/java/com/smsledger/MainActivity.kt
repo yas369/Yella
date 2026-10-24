@@ -47,6 +47,13 @@ class MainActivity : ComponentActivity() {
         handle(intent)
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Catch-up scan every time the app opens: covers messages a killed receiver missed (§13).
+        val app = application as SmsLedgerApplication
+        app.scope.launch { app.catchUp() }
+    }
+
     private fun handle(intent: Intent?) {
         if (intent?.action == ACTION_ADD_EXPENSE) store.pendingAdd = true
     }

@@ -73,6 +73,15 @@ internal fun NeedsCard(
                         BigChoice("Neither is mine", { actions.pickAccount(item, null) }, emphasis = Emphasis.Quiet)
                     }
                 }
+                is NeedsItem.NewAccount -> {
+                    Kind("New account found")
+                    Headline(item.label, "From ${item.sender} · ${com.smsledger.ui.model.dayLabel(item.at.toLocalDate())}", amount = null)
+                    SmsExcerpt(item.sms)
+                    SideBySide(
+                        quiet = "Not mine" to { actions.newAccount(item, false) },
+                        primary = "Mine" to { actions.newAccount(item, true) },
+                    )
+                }
                 is NeedsItem.PossibleTransfer -> {
                     Kind("Move between your own accounts?")
                     Text(
@@ -122,6 +131,7 @@ interface NeedsActions {
     fun tag(item: NeedsItem, category: Category)
     fun lent(item: NeedsItem.NewPayee)
     fun skip(item: NeedsItem)
+    fun newAccount(item: NeedsItem.NewAccount, mine: Boolean)
 }
 
 /** §8 dates: "Today", "Yesterday", then "n days ago". */

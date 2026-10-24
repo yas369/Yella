@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+      SMS-based money management (Play policy exception, spec §1). Requested only after the
+      in-app disclosure screen. No INTERNET permission: nothing can leave the phone.
+    -->
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+
     <!-- Ledger data never leaves the device, including via Android backup. -->
     <application
         android:name=".SmsLedgerApplication"
@@ -36,6 +43,16 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/ledger_widget_info" />
+        </receiver>
+
+        <!-- Live capture: only the system can send this broadcast (BROADCAST_SMS). -->
+        <receiver
+            android:name=".sms.SmsReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_SMS">
+            <intent-filter>
+                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+            </intent-filter>
         </receiver>
     </application>
 

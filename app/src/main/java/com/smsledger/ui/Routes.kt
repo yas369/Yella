@@ -15,6 +15,7 @@ import androidx.compose.runtime.setValue
 import com.smsledger.core.limit.limitStatus
 import com.smsledger.core.money.formatRupees
 import com.smsledger.data.LedgerStore
+import com.smsledger.sms.SmsAccess
 import com.smsledger.ui.history.HistoryScreen
 import com.smsledger.ui.model.Category
 import com.smsledger.ui.model.NeedsItem
@@ -57,6 +58,7 @@ internal fun TodayRoute(
             recent = store.transactions,
             needsCount = store.needs.size,
             monthSpentPaise = store.monthSpentPaise,
+            captureOff = !store.automatic || !SmsAccess.granted(LocalContext.current),
         ),
         categoryOf = store::category,
         onOpenNeeds = { onOpen(Overlay.Needs) },
@@ -64,6 +66,7 @@ internal fun TodayRoute(
         onTxClick = { sheets.editingTxId = it.id },
         listState = listState,
         contentPadding = padding,
+        onTurnOnCapture = { onOpen(Overlay.Capture) },
     )
 }
 
@@ -73,19 +76,26 @@ internal fun HistoryRoute(store: LedgerStore, sheets: SheetState, padding: Paddi
 }
 
 @Composable
-internal fun SettingsRoute(store: LedgerStore, notifier: Notifier, sheets: SheetState, padding: PaddingValues, onOpenOwed: () -> Unit) {
+internal fun SettingsRoute(store: LedgerStore, notifier: Notifier, sheets: SheetState, padding: PaddingValues, onOpen: (Overlay) -> Unit) {
     val context = LocalContext.current
     SettingsScreen(
         state = SettingsState(
             limitPaise = store.limitPaise,
             darkOverride = store.darkOverride,
+            automatic = store.automatic && SmsAccess.granted(context),
+            accountCount = store.accounts.size,
+            templateCount = store.templates.size,
         ),
         onEditLimit = { sheets.editingLimit = true },
-        onOpenOwed = onOpenOwed,
+        onOpenOwed = { onOpen(Overlay.Owed) },
         onDarkOverride = store::changeTheme,
         onAddWidget = { if (!requestPinWidget(context)) notifier.show("Your launcher can't add widgets this way. Long-press the home screen → Widgets.") },
         onDeleteAll = store::deleteAll,
         contentPadding = padding,
+        onTurnOnCapture = { onOpen(Overlay.Capture) },
+        onTurnOffCapture = store::turnOffAutomatic,
+        onOpenAccounts = { onOpen(Overlay.Accounts) },
+        onOpenTemplates = { onOpen(Overlay.Templates) },
     )
 }
 
@@ -110,6 +120,7 @@ internal fun NeedsRoute(store: LedgerStore, notifier: Notifier, sheets: SheetSta
             override fun tag(item: NeedsItem, category: Category) = store.act(notifier) { tagPayee(item, category.id) }
             override fun lent(item: NeedsItem.NewPayee) = store.act(notifier) { lentFromNeeds(item) }
             override fun skip(item: NeedsItem) = store.act(notifier) { skip(item) }
+            override fun newAccount(item: NeedsItem.NewAccount, mine: Boolean) = store.act(notifier) { answerNewAccount(item, mine) }
         },
         untaggedCount = store::untaggedCount,
     )
@@ -165,9 +176,9 @@ internal fun AppSheets(store: LedgerStore, notifier: Notifier, sheets: SheetStat
         TeachSheet(
             item = item,
             onDismiss = { sheets.teachingId = null },
-            onLearned = { amount, moneyIn ->
+            onLearned = { amount, moneyIn, allLikeThis ->
                 sheets.teachingId = null
-                store.act(notifier) { learn(item, amount, moneyIn) }
+                store.act(notifier) { learn(item, amount, moneyIn, allLikeThis) }
             },
             onIgnoreLikeThis = {
                 sheets.teachingId = null

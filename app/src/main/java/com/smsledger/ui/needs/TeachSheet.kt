@@ -43,7 +43,7 @@ import com.smsledger.ui.components.LedgerChip
 fun TeachSheet(
     item: NeedsItem.Unreadable,
     onDismiss: () -> Unit,
-    onLearned: (amountPaise: Long, moneyIn: Boolean) -> Unit,
+    onLearned: (amountPaise: Long, moneyIn: Boolean, allLikeThis: Boolean) -> Unit,
     onIgnoreLikeThis: () -> Unit,
 ) {
     var direction by rememberSaveable { mutableStateOf<String?>(null) }
@@ -89,14 +89,14 @@ fun TeachSheet(
                         else -> {
                             Text("₹${amount.orEmpty()} ${if (direction == "in") "in" else "out"}", style = MoneyStyles.Title)
                             Text(
-                                "Messages like this are now read automatically. Undo it any time in Settings, Learned messages.",
+                                "All like this: messages with the same wording are read automatically from now on. You can undo it in Settings, Learned messages.",
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = LedgerTheme.colors.textSecondary,
                             )
                             Spacer(Modifier.height(Space.S))
-                            BigChoice("Done", {
-                                onLearned(AmountInput.toPaise(amount.orEmpty().replace(",", "")), direction == "in")
-                            }, emphasis = Emphasis.Primary)
+                            val paise = AmountInput.toPaise(amount.orEmpty().replace(",", ""))
+                            BigChoice("All like this", { onLearned(paise, direction == "in", true) }, emphasis = Emphasis.Primary)
+                            BigChoice("Just this one", { onLearned(paise, direction == "in", false) })
                         }
                     }
                 }

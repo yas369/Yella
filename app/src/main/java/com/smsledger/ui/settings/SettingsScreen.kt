@@ -34,6 +34,9 @@ import com.smsledger.ui.theme.Space
 data class SettingsState(
     val limitPaise: Long,
     val darkOverride: Boolean?,
+    val automatic: Boolean = false,
+    val accountCount: Int = 0,
+    val templateCount: Int = 0,
 )
 
 /** Settings (§7): plain rows separated by dividers, grouped under section titles. No icons. */
@@ -46,8 +49,13 @@ fun SettingsScreen(
     onAddWidget: () -> Unit,
     onDeleteAll: () -> Unit,
     contentPadding: PaddingValues,
+    onTurnOnCapture: () -> Unit = {},
+    onTurnOffCapture: () -> Unit = {},
+    onOpenAccounts: () -> Unit = {},
+    onOpenTemplates: () -> Unit = {},
 ) {
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
+    var confirmManual by rememberSaveable { mutableStateOf(false) }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding() + Space.XL)) {
         item { Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars)) }
         item {
@@ -57,6 +65,18 @@ fun SettingsScreen(
             Group("Spending") {
                 row { Setting("Daily limit", formatRupees(state.limitPaise), onClick = onEditLimit) }
                 row { Setting("Owed to you", "Money you've lent", onClick = onOpenOwed) }
+            }
+        }
+        item {
+            Group("SMS capture") {
+                row {
+                    Setting(
+                        "Mode",
+                        if (state.automatic) "Automatic: reads bank SMS on this phone" else "Manual: you add expenses yourself",
+                    ) { if (state.automatic) confirmManual = true else onTurnOnCapture() }
+                }
+                row { Setting("Accounts", if (state.accountCount == 0) "None yet" else "${state.accountCount} found · Mine or Not mine", onClick = onOpenAccounts) }
+                row { Setting("Learned messages", if (state.templateCount == 0) "None yet" else "${state.templateCount} message formats", onClick = onOpenTemplates) }
             }
         }
         item {
@@ -82,6 +102,15 @@ fun SettingsScreen(
                 row { Setting("Delete all data", "Erase every entry and setting and start over", danger = true) { confirmDelete = true } }
             }
         }
+    }
+    if (confirmManual) {
+        AlertDialog(
+            onDismissRequest = { confirmManual = false },
+            title = { Text("Stop reading SMS?") },
+            text = { Text("Transactions already captured stay. New bank SMS won't be read until you turn this on again. To remove SMS access entirely, turn it off for SMS Ledger in the phone's Settings, Apps.") },
+            confirmButton = { LedgerButton("Stop", { confirmManual = false; onTurnOffCapture() }, emphasis = Emphasis.Text) },
+            dismissButton = { LedgerButton("Cancel", { confirmManual = false }, emphasis = Emphasis.Quiet) },
+        )
     }
     if (confirmDelete) {
         AlertDialog(
