@@ -24,8 +24,21 @@ export JAVA_HOME="/c/Program Files/Android/Android Studio/jbr"
 | Task | Command |
 |---|---|
 | Core tests | `./gradlew :core:test` |
-| App unit tests | `./gradlew :app:testDebugUnitTest` |
-| Debug APK | `./gradlew assembleDebug` |
+| App unit tests (both builds) | `./gradlew testOfflineDebugUnitTest testSmsDebugUnitTest` |
+| Debug APKs | `./gradlew assembleOfflineDebug assembleSmsDebug` |
 | Corpus report | `./gradlew :tools:corpus:run --args="<report> <path-to-export.xml>"` |
 
 SMS exports go in `data/` (gitignored). Never commit real messages.
+
+## Builds
+
+Two builds from one codebase. Both share the application id and debug key, so installing `sms` over `offline` keeps your data.
+
+| Build | SMS permissions | How to install | What it does |
+|---|---|---|---|
+| `offline` | None | Open `app/build/outputs/apk/offline/debug/app-offline-debug.apk` on the phone | Manual ledger: daily limit, categories, lent, history, widget, alerts. Reads nothing. |
+| `sms` | `READ_SMS`, `RECEIVE_SMS`, asked at runtime only after the in-app disclosure | Over USB: `./gradlew installSmsDebug`. Later: Play Store, after Google approves the SMS Permissions Declaration. | Everything in `offline`, plus automatic capture from bank SMS. |
+
+Google Play Protect blocks apps that *declare* SMS permissions when they're installed from a file (browser, Files, chat apps). That check runs at install time, before the app can show its consent screen, which is why the `sms` build installs over USB or from the Play Store instead.
+
+**Privacy, both builds:** no `INTERNET` permission, no account, no analytics, Android backup and device transfer disabled. SMS are processed on the phone only, and only messages from accounts you confirm are stored.

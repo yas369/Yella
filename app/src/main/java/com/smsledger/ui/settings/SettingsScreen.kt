@@ -35,6 +35,8 @@ data class SettingsState(
     val limitPaise: Long,
     val darkOverride: Boolean?,
     val automatic: Boolean = false,
+    /** False in the offline build, which declares no SMS permissions. */
+    val smsBuild: Boolean = true,
     val accountCount: Int = 0,
     val templateCount: Int = 0,
     val limitAlerts: Boolean = true,
@@ -75,6 +77,10 @@ fun SettingsScreen(
         }
         item {
             Group("SMS capture") {
+                if (!state.smsBuild) {
+                    row { Setting("Mode", "Manual only. This build doesn't read SMS; nothing is collected.", onClick = null) }
+                    return@Group
+                }
                 row {
                     Setting(
                         "Mode",

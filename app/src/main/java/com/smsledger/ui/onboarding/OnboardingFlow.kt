@@ -23,7 +23,8 @@ import com.smsledger.ui.theme.Space
  */
 @Composable
 fun OnboardingFlow(store: LedgerStore, onFinish: (limitPaise: Long) -> Unit) {
-    var captureDone by rememberSaveable { mutableStateOf(false) }
+    // The offline build can't read SMS, so first run is just the daily limit.
+    var captureDone by rememberSaveable { mutableStateOf(!com.smsledger.BuildConfig.SMS_CAPTURE) }
     Surface(Modifier.fillMaxSize(), color = LedgerTheme.colors.bg) {
         if (!captureDone) {
             CaptureSetupFlow(store, onFinished = { captureDone = true })

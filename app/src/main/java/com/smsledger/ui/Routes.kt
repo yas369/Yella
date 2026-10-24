@@ -14,6 +14,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.smsledger.core.limit.limitStatus
 import com.smsledger.core.money.formatRupees
+import com.smsledger.BuildConfig
 import com.smsledger.data.LedgerStore
 import com.smsledger.sms.SmsAccess
 import android.Manifest
@@ -64,7 +65,8 @@ internal fun TodayRoute(
             recent = store.transactions,
             needsCount = store.needs.size,
             monthSpentPaise = store.monthSpentPaise,
-            captureOff = !store.automatic || !SmsAccess.granted(LocalContext.current),
+            // Only the sms build can turn capture on, so only it offers the row.
+            captureOff = BuildConfig.SMS_CAPTURE && (!store.automatic || !SmsAccess.granted(LocalContext.current)),
         ),
         categoryOf = store::category,
         onOpenNeeds = { onOpen(Overlay.Needs) },
@@ -96,6 +98,7 @@ internal fun SettingsRoute(store: LedgerStore, notifier: Notifier, sheets: Sheet
             limitPaise = store.limitPaise,
             darkOverride = store.darkOverride,
             automatic = store.automatic && SmsAccess.granted(context),
+            smsBuild = BuildConfig.SMS_CAPTURE,
             accountCount = store.accounts.size,
             templateCount = store.templates.size,
             limitAlerts = store.limitAlerts,

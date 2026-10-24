@@ -17,6 +17,23 @@ android {
         versionName = "0.1.0"
     }
 
+    // Two builds from one codebase (README "Builds"). Same applicationId and key, so installing
+    // `sms` over `offline` keeps the user's data. Neither build has internet access.
+    flavorDimensions += "capture"
+    productFlavors {
+        // No SMS permissions: installs from an APK file anywhere. Manual entry only.
+        create("offline") {
+            dimension = "capture"
+            buildConfigField("boolean", "SMS_CAPTURE", "false")
+        }
+        // Automatic capture after in-app consent. READ_SMS/RECEIVE_SMS live in src/sms/AndroidManifest.xml.
+        // Play Protect blocks this build when sideloaded from a file; install over USB or via the Play Store.
+        create("sms") {
+            dimension = "capture"
+            buildConfigField("boolean", "SMS_CAPTURE", "true")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
