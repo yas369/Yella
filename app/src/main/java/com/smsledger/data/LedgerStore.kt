@@ -1,4 +1,4 @@
-package com.smsledger.ui.demo
+package com.smsledger.data
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -21,63 +21,97 @@ import com.smsledger.ui.model.NeedsItem
 import com.smsledger.ui.model.Tx
 import com.smsledger.ui.model.TxKind
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
-/** Design-preview scenarios, switchable from Settings so every Today state can be reviewed. */
-enum class Scenario(val label: String) { Normal("Normal"), NearLimit("Near limit"), OverLimit("Over limit"), EmptyDay("Empty day") }
+/** Starter categories every new install gets. Product defaults, not user data. */
+val DefaultCategories = listOf(
+    Category("food", "Food"),
+    Category("groceries", "Groceries"),
+    Category("travel", "Travel"),
+    Category("shopping", "Shopping"),
+    Category("health", "Health"),
+    Category("fun", "Fun"),
+    Category("bills", "Bills", countsDaily = false),
+    Category("rent", "Rent", countsDaily = false),
+    Category("emi", "EMI", countsDaily = false),
+)
 
 /**
- * In-memory state for the design preview. All money rules come from `core` (LedgerMath,
- * CategoryRules, LentBook) so they're the same rules the Room-backed app (T6+) will use.
- * Nothing is persisted yet: state resets when the app process restarts.
+ * The app's state: the user's own entries, kept in Compose state for the screens and written
+ * through to [disk] after every change. All money rules come from `core` (LedgerMath,
+ * CategoryRules, LentBook). Starts empty; [load] fills it from disk.
  */
-class DemoStore(private val clock: () -> LocalDate = { LocalDate.now() }) {
-    var onboarded by mutableStateOf(false)
-    var automatic by mutableStateOf(true)
-    var limitPaise by mutableLongStateOf(50_000)
-    var scenario by mutableStateOf(Scenario.Normal)
+class LedgerStore(
+    private val disk: LedgerDisk,
+    private val clock: () -> LocalDateTime = { LocalDateTime.now() },
+) {
+    /** False until [load] has read the disk; the splash screen stays up until then. */
+    var loaded by mutableStateOf(false)
         private set
-    var alertsCardVisible by mutableStateOf(true)
-    var limitAlerts by mutableStateOf(false)
-    var lentReminder by mutableStateOf(true)
+    var onboarded by mutableStateOf(false)
+        private set
+    var limitPaise by mutableLongStateOf(DEFAULT_LIMIT_PAISE)
+        private set
     /** null = follow the system theme. */
     var darkOverride by mutableStateOf<Boolean?>(null)
-    /** Material You wallpaper colours (Android 12+). */
-    var dynamicColor by mutableStateOf(true)
+        private set
     /** Set by the "Add expense" launcher shortcut / widget; the shell opens the Add sheet and clears it. */
     var pendingAdd by mutableStateOf(false)
 
-    val categories: List<Category> = SampleData.categories
+    val categories: List<Category> = DefaultCategories
     val transactions = mutableStateListOf<Tx>()
+    /** Questions raised by SMS capture. Empty until capture exists; nothing in manual mode adds to it. */
     val needs = mutableStateListOf<NeedsItem>()
     var lentBook by mutableStateOf(LentBook())
         private set
     /** Payee key → category id: "tag once per payee and it sticks" (§11). */
     val payeeRules = mutableStateMapOf<String, String>()
 
-    private var nextId = 1_000L
+    private var nextId = 1L
 
-    init {
-        applyScenario(Scenario.Normal)
+    suspend fun load() {
+        val (data, prefs) = disk.load()
+        put(data)
+        nextId = (data.transactions.maxOfOrNull { it.id } ?: 0L) + 1
+        onboarded = prefs.onboarded
+        limitPaise = prefs.limitPaise
+        darkOverride = prefs.darkOverride
+        loaded = true
     }
 
-    val today: LocalDate get() = clock()
+    val today: LocalDate get() = clock().toLocalDate()
 
-    fun applyScenario(value: Scenario) {
-        scenario = value
-        val base = SampleData.baseTransactions
-        transactions.clear()
-        transactions += when (value) {
-            Scenario.Normal -> base
-            Scenario.NearLimit -> base + SampleData.warningExtras
-            Scenario.OverLimit -> base + SampleData.overExtras
-            Scenario.EmptyDay -> base.filter { it.daysAgo > 0 }
-        }.sortedForList()
+    // ---- Settings ------------------------------------------------------------------------------
+
+    private fun prefs() = Prefs(onboarded, limitPaise, darkOverride)
+
+    fun finishOnboarding(limitPaise: Long) {
+        this.limitPaise = limitPaise
+        onboarded = true
+        disk.savePrefs(prefs())
+    }
+
+    fun changeLimit(paise: Long) {
+        limitPaise = paise
+        disk.savePrefs(prefs())
+    }
+
+    fun changeTheme(dark: Boolean?) {
+        darkOverride = dark
+        disk.savePrefs(prefs())
+    }
+
+    /** Erases everything and returns to first run. Permanent: there is no Undo. */
+    fun deleteAll() {
+        disk.clear()
+        put(LedgerData())
         needs.clear()
-        needs += SampleData.needs
-        lentBook = SampleData.lentBook(today)
-        payeeRules.clear()
+        nextId = 1
+        limitPaise = DEFAULT_LIMIT_PAISE
+        darkOverride = null
+        onboarded = false
     }
 
     // ---- Reads -----------------------------------------------------------------------------
@@ -96,14 +130,12 @@ class DemoStore(private val clock: () -> LocalDate = { LocalDate.now() }) {
             TxKind.Transfer -> EntryKind.Transfer
             TxKind.Lent -> EntryKind.Lent
         },
-        date = today.minusDays(daysAgo.toLong()),
+        date = date,
         categoryId = categoryId,
         excluded = excluded,
     )
 
     private val entries: List<LedgerEntry> get() = transactions.map { it.toEntry() }
-
-    val todayTransactions: List<Tx> get() = transactions.filter { it.daysAgo == 0 }
 
     val spentTodayPaise: Long get() = LedgerMath.spentOn(entries, today, notDaily)
 
@@ -124,7 +156,8 @@ class DemoStore(private val clock: () -> LocalDate = { LocalDate.now() }) {
         return Debtor(
             id = person.lowercase().hashCode().toLong(),
             name = person,
-            handle = SampleData.handles[CategoryRules.payeeKey(person)] ?: person,
+            // Manual entries know people by name; SMS capture will add the VPA or phone (§9).
+            handle = person,
             since = since?.let { if (it == today) "since today" else "since ${it.format(f)}" } ?: "",
             entries = events.map {
                 when (it.kind) {
@@ -144,11 +177,27 @@ class DemoStore(private val clock: () -> LocalDate = { LocalDate.now() }) {
 
     fun snapshot() = Snapshot(transactions.toList(), needs.toList(), lentBook, payeeRules.toMap())
 
-    fun restore(s: Snapshot) {
+    fun restore(s: Snapshot) = write {
         transactions.clear(); transactions += s.transactions
         needs.clear(); needs += s.needs
         lentBook = s.lentBook
         payeeRules.clear(); payeeRules += s.rules
+    }
+
+    private fun data() = LedgerData(transactions.toList(), lentBook, payeeRules.toMap())
+
+    private fun put(data: LedgerData) {
+        transactions.clear(); transactions += data.transactions.sortedForList()
+        lentBook = data.lentBook
+        payeeRules.clear(); payeeRules += data.payeeRules
+    }
+
+    /** Runs [block], then saves whatever it changed. Every mutation goes through here. */
+    private fun <T> write(block: () -> T): T {
+        val before = data()
+        val result = block()
+        disk.save(before, data())
+        return result
     }
 
     // ---- Actions (each returns the message for the Undo snackbar) ---------------------------
@@ -158,7 +207,7 @@ class DemoStore(private val clock: () -> LocalDate = { LocalDate.now() }) {
      * Money received from someone who owes you closes or reduces that debt instead of counting
      * as income (§9).
      */
-    fun addManual(amountPaise: Long, kind: TxKind, categoryId: String?, payee: String): String {
+    fun addManual(amountPaise: Long, kind: TxKind, categoryId: String?, payee: String): String = write {
         val name = payee.trim().ifBlank { if (kind == TxKind.Income) "Received" else "Cash spend" }
         if (kind == TxKind.Income) {
             val owed = lentBook.outstanding(name)
@@ -170,8 +219,8 @@ class DemoStore(private val clock: () -> LocalDate = { LocalDate.now() }) {
                 income == 0L -> "Repaid"
                 else -> "Repaid + income"
             }
-            insert(Tx(nextId++, name, "Manual", "now", 0, amountPaise, TxKind.Income, note = note))
-            return when {
+            insert(Tx(nextId++, name, "Manual", clock(), amountPaise, TxKind.Income, note = note))
+            return@write when {
                 repaid == 0L -> "Added ${formatRupees(amountPaise)} received"
                 repaid < owed -> "$name repaid ${formatRupees(repaid)} · ${formatRupees(owed - repaid)} still owed"
                 income > 0 -> "$name paid back in full · ${formatRupees(income)} counted as income"
@@ -180,29 +229,29 @@ class DemoStore(private val clock: () -> LocalDate = { LocalDate.now() }) {
         }
         val category = categoryId ?: CategoryRules.categoryFor(name, payeeRules)
         if (categoryId != null) payeeRules[CategoryRules.payeeKey(name)] = categoryId
-        insert(Tx(nextId++, name, "Manual", "now", 0, amountPaise, TxKind.Spend, category))
-        return if (categoryId == null && category != null) "Added ${formatRupees(amountPaise)} · tagged ${category(category)?.name}" else "Added ${formatRupees(amountPaise)}"
+        insert(Tx(nextId++, name, "Manual", clock(), amountPaise, TxKind.Spend, category))
+        if (categoryId == null && category != null) "Added ${formatRupees(amountPaise)} · tagged ${category(category)?.name}" else "Added ${formatRupees(amountPaise)}"
     }
 
     /** Category from the edit sheet or Needs you. Always becomes the payee's rule (§11). */
-    fun setCategory(tx: Tx, categoryId: String, allLikeThis: Boolean): String {
-        val target = transactions.firstOrNull { it.id == tx.id } ?: return ""
+    fun setCategory(tx: Tx, categoryId: String, allLikeThis: Boolean): String = write {
+        val target = transactions.firstOrNull { it.id == tx.id } ?: return@write ""
         val updated = CategoryRules.apply(entries, target.toEntry(), categoryId, allLikeThis).associate { it.id to it.categoryId }
         transactions.replaceAll { it.copy(categoryId = updated[it.id]) }
         payeeRules[CategoryRules.payeeKey(tx.payee)] = categoryId
         val name = category(categoryId)
         val scope = if (allLikeThis) "all ${tx.payee} payments" else tx.payee
         val note = if (name?.countsDaily == false) " · not counted toward the daily limit" else ""
-        return "${name?.name} for $scope$note"
+        "${name?.name} for $scope$note"
     }
 
     /** Lent / self-transfer toggles (§9). Marking lent opens a debt; un-marking removes it. */
-    fun setKind(tx: Tx, kind: TxKind): String {
-        val current = transactions.firstOrNull { it.id == tx.id } ?: return ""
+    fun setKind(tx: Tx, kind: TxKind): String = write {
+        val current = transactions.firstOrNull { it.id == tx.id } ?: return@write ""
         if (current.kind == TxKind.Lent && kind != TxKind.Lent) lentBook = lentBook.cancelLend(current.payee, current.amountPaise)
-        if (kind == TxKind.Lent && current.kind != TxKind.Lent) lentBook = lentBook.lend(current.payee, current.amountPaise, today.minusDays(current.daysAgo.toLong()))
+        if (kind == TxKind.Lent && current.kind != TxKind.Lent) lentBook = lentBook.lend(current.payee, current.amountPaise, current.date)
         replace(current.copy(kind = kind))
-        return when (kind) {
+        when (kind) {
             TxKind.Lent -> "Lent to ${current.payee} · not counted, added to Owed to you"
             TxKind.Transfer -> "Marked as self-transfer · not counted"
             else -> if (current.kind == TxKind.Lent) "No longer lent" else "No longer a transfer"
@@ -210,44 +259,44 @@ class DemoStore(private val clock: () -> LocalDate = { LocalDate.now() }) {
     }
 
     /** Amount, direction and payee edits (§10). A lent row's debt follows its new amount. */
-    fun editDetails(tx: Tx, amountPaise: Long, kind: TxKind, payee: String): String {
-        val current = transactions.firstOrNull { it.id == tx.id } ?: return ""
+    fun editDetails(tx: Tx, amountPaise: Long, kind: TxKind, payee: String): String = write {
+        val current = transactions.firstOrNull { it.id == tx.id } ?: return@write ""
         val name = payee.trim().ifBlank { current.payee }
         if (current.kind == TxKind.Lent) {
-            lentBook = lentBook.cancelLend(current.payee, current.amountPaise).lend(name, amountPaise, today.minusDays(current.daysAgo.toLong()))
+            lentBook = lentBook.cancelLend(current.payee, current.amountPaise).lend(name, amountPaise, current.date)
         }
         replace(current.copy(amountPaise = amountPaise, kind = kind, payee = name))
-        return "Updated"
+        "Updated"
     }
 
     /** "Not a transaction" (§10): kept in history, removed from every total. */
-    fun setExcluded(tx: Tx, excluded: Boolean): String {
-        val current = transactions.firstOrNull { it.id == tx.id } ?: return ""
+    fun setExcluded(tx: Tx, excluded: Boolean): String = write {
+        val current = transactions.firstOrNull { it.id == tx.id } ?: return@write ""
         if (excluded && current.kind == TxKind.Lent) lentBook = lentBook.cancelLend(current.payee, current.amountPaise)
         replace(current.copy(excluded = excluded))
-        return if (excluded) "Not a transaction · removed from totals" else "Counted again"
+        if (excluded) "Not a transaction · removed from totals" else "Counted again"
     }
 
     /** "Mark repaid" on Owed to you: settles the rest in cash, nothing added as income. */
-    fun markRepaid(debtor: Debtor): String {
+    fun markRepaid(debtor: Debtor): String = write {
         lentBook = lentBook.repay(debtor.name, debtor.outstandingPaise, today).first
-        return "${debtor.name} paid back ${formatRupees(debtor.outstandingPaise)}"
+        "${debtor.name} paid back ${formatRupees(debtor.outstandingPaise)}"
     }
 
-    fun writeOff(debtor: Debtor): String {
+    fun writeOff(debtor: Debtor): String = write {
         lentBook = lentBook.writeOff(debtor.name, today)
-        return "Wrote off ${formatRupees(debtor.outstandingPaise)} from ${debtor.name}"
+        "Wrote off ${formatRupees(debtor.outstandingPaise)} from ${debtor.name}"
     }
 
     // ---- Needs you (§15.2) -------------------------------------------------------------------
 
     /** Teach (§7): the message becomes a transaction now; the template would handle the next one. */
-    fun learn(item: NeedsItem.Unreadable, amountPaise: Long, moneyIn: Boolean): String {
+    fun learn(item: NeedsItem.Unreadable, amountPaise: Long, moneyIn: Boolean): String = write {
         needs.remove(item)
         val kind = if (moneyIn) TxKind.Income else TxKind.Spend
         val category = if (moneyIn) null else CategoryRules.categoryFor(item.payee, payeeRules)
-        insert(Tx(nextId++, item.payee, item.account, "from SMS", item.daysAgo, amountPaise, kind, category, sms = item.body))
-        return "Learned · ${formatRupees(amountPaise)} ${if (moneyIn) "received" else "spent"} added"
+        insert(Tx(nextId++, item.payee, item.account, clock().minusDays(item.daysAgo.toLong()), amountPaise, kind, category, sms = item.body))
+        "Learned · ${formatRupees(amountPaise)} ${if (moneyIn) "received" else "spent"} added"
     }
 
     fun ignoreLikeThis(item: NeedsItem.Unreadable): String {
@@ -261,31 +310,40 @@ class DemoStore(private val clock: () -> LocalDate = { LocalDate.now() }) {
     }
 
     /** Ambiguous 3-digit mask resolved (§4): the debit is added to the chosen account. */
-    fun pickAccount(item: NeedsItem.WhichAccount, account: String?): String {
+    fun pickAccount(item: NeedsItem.WhichAccount, account: String?): String = write {
         needs.remove(item)
-        if (account == null) return "Ignored · neither account is yours"
-        insert(Tx(nextId++, item.payee, account, "from SMS", item.daysAgo, item.amountPaise, TxKind.Spend, CategoryRules.categoryFor(item.payee, payeeRules)))
-        return "Added ${formatRupees(item.amountPaise)} to $account"
+        if (account == null) return@write "Ignored · neither account is yours"
+        insert(
+            Tx(
+                nextId++, item.payee, account, clock().minusDays(item.daysAgo.toLong()), item.amountPaise, TxKind.Spend,
+                CategoryRules.categoryFor(item.payee, payeeRules), sms = item.sms,
+            ),
+        )
+        "Added ${formatRupees(item.amountPaise)} to $account"
     }
 
     /** Self-transfer pair (§9): both rows stay, both stop counting. */
-    fun resolveTransfer(item: NeedsItem.PossibleTransfer, isTransfer: Boolean): String {
+    fun resolveTransfer(item: NeedsItem.PossibleTransfer, isTransfer: Boolean): String = write {
         needs.remove(item)
-        if (!isTransfer) return "Kept as separate payments"
+        if (!isTransfer) return@write "Kept as separate payments"
         transactions.replaceAll { if (it.id == item.outTxId || it.id == item.inTxId) it.copy(kind = TxKind.Transfer) else it }
-        return "Paired as self-transfer · not counted"
+        "Paired as self-transfer · not counted"
     }
 
-    fun tagPayee(item: NeedsItem, categoryId: String): String {
+    fun tagPayee(item: NeedsItem, categoryId: String): String = write {
         needs.remove(item)
         val payee = when (item) {
             is NeedsItem.NewPayee -> item.payee
             is NeedsItem.Bulk -> item.payee
-            else -> return ""
+            else -> return@write ""
         }
         val sample = transactions.firstOrNull { it.kind == TxKind.Spend && CategoryRules.payeeKey(it.payee) == CategoryRules.payeeKey(payee) }
-            ?: run { payeeRules[CategoryRules.payeeKey(payee)] = categoryId; return "${category(categoryId)?.name} for future $payee payments" }
-        return setCategory(sample, categoryId, allLikeThis = true)
+        if (sample == null) {
+            payeeRules[CategoryRules.payeeKey(payee)] = categoryId
+            "${category(categoryId)?.name} for future $payee payments"
+        } else {
+            setCategory(sample, categoryId, allLikeThis = true)
+        }
     }
 
     fun lentFromNeeds(item: NeedsItem.NewPayee): String {
@@ -312,6 +370,6 @@ class DemoStore(private val clock: () -> LocalDate = { LocalDate.now() }) {
         if (index >= 0) transactions[index] = tx
     }
 
-    /** Newest day first; within a day, most recently added first. */
-    private fun List<Tx>.sortedForList() = sortedWith(compareBy<Tx> { it.daysAgo }.thenByDescending { it.id })
+    /** Newest first. */
+    private fun List<Tx>.sortedForList() = sortedWith(compareByDescending<Tx> { it.at }.thenByDescending { it.id })
 }

@@ -2,21 +2,16 @@ package com.smsledger.ui.sheets
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -35,6 +30,13 @@ import com.smsledger.ui.components.NumberPad
 import com.smsledger.ui.model.Category
 import com.smsledger.ui.model.TxKind
 import com.smsledger.ui.theme.Space
+import com.smsledger.ui.theme.LedgerTheme
+import com.smsledger.ui.theme.Radius
+import com.smsledger.ui.components.CategoryChips
+import com.smsledger.ui.components.LedgerButton
+import com.smsledger.ui.components.LedgerChip
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.ui.unit.dp
 
 /** Manual entry (flows.md §6): one sheet, keypad first, everything else optional. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -64,7 +66,7 @@ fun AddExpenseSheet(
         },
     )
 
-    ModalBottomSheet(onDismissRequest = { if (text.isEmpty()) onDismiss() else askDiscard = true }, sheetState = sheetState) {
+    ModalBottomSheet(onDismissRequest = { if (text.isEmpty()) onDismiss() else askDiscard = true }, sheetState = sheetState, containerColor = LedgerTheme.colors.surface, tonalElevation = 0.dp) {
         Column(
             Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = Space.L),
             verticalArrangement = Arrangement.spacedBy(Space.M),
@@ -81,23 +83,15 @@ fun AddExpenseSheet(
                 onValueChange = { payee = it },
                 placeholder = { Text(if (received) "From whom? (optional)" else "Where? (optional)") },
                 singleLine = true,
-                shape = MaterialTheme.shapes.medium,
+                shape = Radius.Control,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = Space.Gutter),
             )
             if (!received) {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = Space.Gutter),
-                    horizontalArrangement = Arrangement.spacedBy(Space.S),
-                ) {
-                    items(categories, key = { it.id }) { category ->
-                        FilterChip(
-                            selected = categoryId == category.id,
-                            onClick = { categoryId = if (categoryId == category.id) null else category.id },
-                            label = { Text(category.name) },
-                            shape = MaterialTheme.shapes.small,
-                        )
-                    }
-                }
+                CategoryChips(
+                    categories, categoryId,
+                    { category -> categoryId = if (categoryId == category.id) null else category.id },
+                    Modifier.padding(horizontal = Space.Gutter),
+                )
             }
             NumberPad(
                 onKey = { text = AmountInput.press(text, it) },
@@ -119,8 +113,8 @@ fun AddExpenseSheet(
             onDismissRequest = { askDiscard = false },
             title = { Text("Discard ${formatRupees(paise)}?") },
             text = { Text("This entry hasn't been saved.") },
-            confirmButton = { TextButton(onClick = { askDiscard = false; onDismiss() }) { Text("Discard") } },
-            dismissButton = { TextButton(onClick = { askDiscard = false }) { Text("Keep editing") } },
+            confirmButton = { LedgerButton("Discard", { askDiscard = false; onDismiss() }, emphasis = Emphasis.Text) },
+            dismissButton = { LedgerButton("Keep editing", { askDiscard = false }, emphasis = Emphasis.Quiet) },
         )
     }
 }
@@ -132,22 +126,15 @@ private val QuickLimits = listOf(30_000L, 50_000L, 100_000L, 200_000L)
 fun LimitSheet(currentPaise: Long, onDismiss: () -> Unit, onSave: (Long) -> Unit) {
     var text by rememberSaveable { mutableStateOf((currentPaise / 100).toString()) }
     val paise = AmountInput.toPaise(text)
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = LedgerTheme.colors.surface, tonalElevation = 0.dp) {
         Column(
             Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = Space.L),
             verticalArrangement = Arrangement.spacedBy(Space.M),
         ) {
             Text("Daily limit", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = Space.Gutter))
             AmountReadout(text)
-            LazyRow(contentPadding = PaddingValues(horizontal = Space.Gutter), horizontalArrangement = Arrangement.spacedBy(Space.S)) {
-                items(QuickLimits) { value ->
-                    FilterChip(
-                        selected = paise == value,
-                        onClick = { text = (value / 100).toString() },
-                        label = { Text(formatRupees(value)) },
-                        shape = MaterialTheme.shapes.small,
-                    )
-                }
+            FlowRow(Modifier.padding(horizontal = Space.Gutter), horizontalArrangement = Arrangement.spacedBy(Space.S)) {
+                QuickLimits.forEach { value -> LedgerChip(formatRupees(value), paise == value) { text = (value / 100).toString() } }
             }
             NumberPad({ text = AmountInput.press(text, it) }, { text = AmountInput.backspace(text) }, Modifier.padding(horizontal = Space.L))
             BigChoice("Save", { onSave(paise) }, Modifier.padding(horizontal = Space.Gutter), Emphasis.Primary, enabled = paise > 0)

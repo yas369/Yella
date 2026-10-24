@@ -33,6 +33,13 @@ data class LentBook(private val debts: Map<String, Debt> = emptyMap()) {
 
     val totalOutstanding: Long get() = owing.sumOf { it.outstandingPaise }
 
+    /** Every debt, settled ones included: what storage saves and [of] restores. */
+    val all: List<Debt> get() = debts.values.toList()
+
+    companion object {
+        fun of(debts: List<Debt>) = LentBook(debts.associateBy { CategoryRules.payeeKey(it.person) })
+    }
+
     fun lend(person: String, amountPaise: Long, date: LocalDate): LentBook {
         val existing = debt(person)?.takeUnless { it.writtenOff }
         val events = (existing?.events ?: emptyList()) + LentEvent(LentEventKind.Lent, amountPaise, date)

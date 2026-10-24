@@ -6,98 +6,95 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
-internal val LightColors = lightColorScheme(
-    primary = Color(0xFF1E5B4A),
-    onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFCDE6DA),
-    onPrimaryContainer = Color(0xFF0A3327),
-    secondary = Color(0xFF5C6460),
-    onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFE3E5DF),
-    onSecondaryContainer = Color(0xFF1A1F1C),
-    tertiary = Color(0xFF8A5A12),
-    onTertiary = Color(0xFFFFFFFF),
-    tertiaryContainer = Color(0xFFF6E0BC),
-    onTertiaryContainer = Color(0xFF2D1B00),
-    error = Color(0xFFB3392B),
-    onError = Color(0xFFFFFFFF),
-    errorContainer = Color(0xFFF8DCD6),
-    onErrorContainer = Color(0xFF410B04),
-    background = Color(0xFFF7F5F0),
-    onBackground = Color(0xFF1C1B18),
-    surface = Color(0xFFF7F5F0),
-    onSurface = Color(0xFF1C1B18),
-    surfaceVariant = Color(0xFFE6E2D9),
-    onSurfaceVariant = Color(0xFF5F5D56),
-    surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFF1EEE7),
-    surfaceContainer = Color(0xFFECE8E0),
-    surfaceContainerHigh = Color(0xFFE6E2D9),
-    surfaceContainerHighest = Color(0xFFE0DBD1),
-    outline = Color(0xFF8B887F),
-    outlineVariant = Color(0xFFD8D3C8),
-    inverseSurface = Color(0xFF31302C),
-    inverseOnSurface = Color(0xFFF3F0E9),
-    inversePrimary = Color(0xFF8ED1B5),
-)
-
-internal val DarkColors = darkColorScheme(
-    primary = Color(0xFF8ED1B5),
-    onPrimary = Color(0xFF003828),
-    primaryContainer = Color(0xFF1C4A3C),
-    onPrimaryContainer = Color(0xFFBDEBD6),
-    secondary = Color(0xFFC1C8C3),
-    onSecondary = Color(0xFF2B322E),
-    secondaryContainer = Color(0xFF3A413D),
-    onSecondaryContainer = Color(0xFFDDE4DF),
-    tertiary = Color(0xFFF0C27A),
-    onTertiary = Color(0xFF452B00),
-    tertiaryContainer = Color(0xFF5A3E0E),
-    onTertiaryContainer = Color(0xFFFFDDB0),
-    error = Color(0xFFF1A497),
-    onError = Color(0xFF5C1A11),
-    errorContainer = Color(0xFF5C1A11),
-    onErrorContainer = Color(0xFFFFDAD3),
-    background = Color(0xFF131412),
-    onBackground = Color(0xFFE6E3DC),
-    surface = Color(0xFF131412),
-    onSurface = Color(0xFFE6E3DC),
-    surfaceVariant = Color(0xFF333633),
-    onSurfaceVariant = Color(0xFFB0ADA5),
-    surfaceContainerLowest = Color(0xFF0E0F0D),
-    surfaceContainerLow = Color(0xFF1A1C19),
-    surfaceContainer = Color(0xFF1F211E),
-    surfaceContainerHigh = Color(0xFF292B28),
-    surfaceContainerHighest = Color(0xFF343633),
-    outline = Color(0xFF8A8780),
-    outlineVariant = Color(0xFF3F423E),
-    inverseSurface = Color(0xFFE6E3DC),
-    inverseOnSurface = Color(0xFF31302C),
-    inversePrimary = Color(0xFF1E5B4A),
-)
-
-/** Meaning-carrying colours that Material's scheme has no slot for. */
+/** The design.md §4 tokens. Colour means state, never decoration; no dynamic colour. */
 @Immutable
 data class LedgerColors(
-    val credit: Color,
-    val warning: Color,
+    val bg: Color,
+    val surface: Color,
+    val text: Color,
+    val textSecondary: Color,
+    val divider: Color,
+    val accent: Color,
+    val onAccent: Color,
     val over: Color,
+    val near: Color,
+    val credit: Color,
+    val lent: Color,
 )
 
-/**
- * Status colours are fixed, never taken from the wallpaper: "amber = 80%, red = over" must mean the
- * same thing on every phone (flows.md §0). Tuned to stay legible on dynamic-colour surfaces.
- */
 internal val LightLedgerColors = LedgerColors(
-    credit = Color(0xFF1F7A55),
-    warning = Color(0xFFB06500),
-    over = Color(0xFFBA1A1A),
+    bg = Color(0xFFF7F5F0),
+    surface = Color(0xFFFFFFFF),
+    text = Color(0xFF1B1C1E),
+    textSecondary = Color(0xFF5E6166),
+    divider = Color(0xFFE3E0D8),
+    accent = Color(0xFF2F45B5),
+    onAccent = Color(0xFFFFFFFF),
+    over = Color(0xFFC2410C),
+    near = Color(0xFFB7791F),
+    credit = Color(0xFF2E7D4F),
+    lent = Color(0xFF8A8D91),
 )
 
 internal val DarkLedgerColors = LedgerColors(
-    credit = Color(0xFF7FD8AE),
-    warning = Color(0xFFFFB95C),
-    over = Color(0xFFFFB4AB),
+    bg = Color(0xFF121417),
+    surface = Color(0xFF1B1E22),
+    text = Color(0xFFE8E6E1),
+    textSecondary = Color(0xFF9A9C9F),
+    divider = Color(0xFF2A2E33),
+    accent = Color(0xFF8FA2F2),
+    onAccent = Color(0xFF0E1430),
+    over = Color(0xFFF08A5D),
+    near = Color(0xFFE2B04A),
+    credit = Color(0xFF6CC48F),
+    lent = Color(0xFF6E7176),
 )
+
+/**
+ * Maps the tokens onto Material's scheme so stock components (sheets, dialogs, fields, snackbars)
+ * follow the brief without per-call colours. Screens sit on `bg`; every container is `surface`;
+ * there are no tinted containers, so the *Container roles are neutral.
+ */
+internal fun LedgerColors.toScheme(dark: Boolean) = if (dark) {
+    darkColorScheme(
+        primary = accent, onPrimary = onAccent,
+        primaryContainer = divider, onPrimaryContainer = text,
+        secondary = textSecondary, onSecondary = bg,
+        secondaryContainer = divider, onSecondaryContainer = text,
+        tertiary = near, onTertiary = bg,
+        tertiaryContainer = divider, onTertiaryContainer = text,
+        error = over, onError = bg, errorContainer = divider, onErrorContainer = text,
+        background = bg, onBackground = text,
+        surface = bg, onSurface = text,
+        surfaceVariant = divider, onSurfaceVariant = textSecondary,
+        surfaceTint = Color.Transparent,
+        surfaceBright = surface, surfaceDim = bg,
+        surfaceContainerLowest = surface, surfaceContainerLow = surface, surfaceContainer = surface,
+        surfaceContainerHigh = surface, surfaceContainerHighest = surface,
+        outline = textSecondary, outlineVariant = divider,
+        inverseSurface = text, inverseOnSurface = bg, inversePrimary = LightLedgerColors.accent,
+        scrim = Color.Black,
+    )
+} else {
+    lightColorScheme(
+        primary = accent, onPrimary = onAccent,
+        primaryContainer = divider, onPrimaryContainer = text,
+        secondary = textSecondary, onSecondary = surface,
+        secondaryContainer = divider, onSecondaryContainer = text,
+        tertiary = near, onTertiary = surface,
+        tertiaryContainer = divider, onTertiaryContainer = text,
+        error = over, onError = surface, errorContainer = divider, onErrorContainer = text,
+        background = bg, onBackground = text,
+        surface = bg, onSurface = text,
+        surfaceVariant = divider, onSurfaceVariant = textSecondary,
+        surfaceTint = Color.Transparent,
+        surfaceBright = surface, surfaceDim = bg,
+        surfaceContainerLowest = surface, surfaceContainerLow = surface, surfaceContainer = surface,
+        surfaceContainerHigh = surface, surfaceContainerHighest = surface,
+        outline = textSecondary, outlineVariant = divider,
+        inverseSurface = text, inverseOnSurface = bg, inversePrimary = DarkLedgerColors.accent,
+        scrim = Color.Black,
+    )
+}
 
 val LocalLedgerColors = staticCompositionLocalOf { LightLedgerColors }

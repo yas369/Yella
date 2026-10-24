@@ -5,10 +5,11 @@ import com.smsledger.ui.model.TxKind
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.LocalDateTime
 
 class HistoryMatchTest {
 
-    private val swiggy = Tx(1, "Swiggy", "HDFC ••4821", "8:45 pm", 1, 125_000, TxKind.Spend)
+    private val swiggy = Tx(1, "Swiggy", "HDFC ••4821", LocalDateTime.of(2026, 10, 23, 20, 45), 125_000, TxKind.Spend)
 
     @Test
     fun `blank query matches everything`() {

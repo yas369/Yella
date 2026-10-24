@@ -63,16 +63,18 @@ class LedgerWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = LedgerWidget()
 }
 
-// Fixed status colours (same as the app's LedgerColors): meaning never follows the wallpaper.
-private val WarningColor = ColorProvider(day = Color(0xFFB06500), night = Color(0xFFFFB95C))
-private val OverColor = ColorProvider(day = Color(0xFFBA1A1A), night = Color(0xFFFFB4AB))
+// design.md §4 tokens: the widget uses the app's fixed palette, never the wallpaper.
+private val WarningColor = ColorProvider(day = Color(0xFFB7791F), night = Color(0xFFE2B04A))
+private val OverColor = ColorProvider(day = Color(0xFFC2410C), night = Color(0xFFF08A5D))
+private val TextColor = ColorProvider(day = Color(0xFF1B1C1E), night = Color(0xFFE8E6E1))
+private val DividerColor = ColorProvider(day = Color(0xFFE3E0D8), night = Color(0xFF2A2E33))
 
 @Composable
 private fun WidgetContent(snapshot: WidgetSnapshot) {
     val context = LocalContext.current
     val tall = LocalSize.current.height >= 120.dp
     val levelColor = when (snapshot.level) {
-        LimitLevel.Ok -> GlanceTheme.colors.primary
+        LimitLevel.Ok -> TextColor
         LimitLevel.Warning -> WarningColor
         LimitLevel.Over -> OverColor
     }
@@ -105,9 +107,9 @@ private fun WidgetContent(snapshot: WidgetSnapshot) {
         Spacer(GlanceModifier.height(8.dp))
         LinearProgressIndicator(
             progress = snapshot.fraction,
-            modifier = GlanceModifier.fillMaxWidth().height(8.dp),
+            modifier = GlanceModifier.fillMaxWidth().height(4.dp),
             color = levelColor,
-            backgroundColor = GlanceTheme.colors.secondaryContainer,
+            backgroundColor = DividerColor,
         )
         if (tall) {
             Spacer(GlanceModifier.height(10.dp))

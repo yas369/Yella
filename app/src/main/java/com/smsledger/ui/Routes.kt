@@ -2,8 +2,6 @@ package com.smsledger.ui
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyListState
-import com.smsledger.BuildConfig
-import com.smsledger.ui.theme.supportsDynamicColor
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
@@ -16,7 +14,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.smsledger.core.limit.limitStatus
 import com.smsledger.core.money.formatRupees
-import com.smsledger.ui.demo.DemoStore
+import com.smsledger.data.LedgerStore
 import com.smsledger.ui.history.HistoryScreen
 import com.smsledger.ui.model.Category
 import com.smsledger.ui.model.NeedsItem
@@ -43,8 +41,7 @@ class SheetState {
 
 @Composable
 internal fun TodayRoute(
-    store: DemoStore,
-    notifier: Notifier,
+    store: LedgerStore,
     sheets: SheetState,
     listState: LazyListState,
     padding: PaddingValues,
@@ -52,97 +49,55 @@ internal fun TodayRoute(
     onHistory: () -> Unit,
 ) {
     val spent = store.spentTodayPaise
-    val status = limitStatus(spent, store.limitPaise)
     TodayScreen(
         state = TodayState(
-            status = status,
+            status = limitStatus(spent, store.limitPaise),
             spentPaise = spent,
             limitPaise = store.limitPaise,
-            transactions = store.todayTransactions,
+            recent = store.transactions,
             needsCount = store.needs.size,
-            needsSummary = needsSummary(store.needs),
-            owedPaise = store.owedPaise,
-            owedPeople = store.debtors.size,
             monthSpentPaise = store.monthSpentPaise,
-            showAlertsCard = store.alertsCardVisible && !store.limitAlerts && status.fraction >= 0.5f,
-            manualMode = !store.automatic,
         ),
         categoryOf = store::category,
         onOpenNeeds = { onOpen(Overlay.Needs) },
-        onOpenOwed = { onOpen(Overlay.Owed) },
         onOpenHistory = onHistory,
-        onAlertsTurnOn = {
-            store.limitAlerts = true
-            notifier.show("Alerts on at 80% and 100%")
-        },
-        onAlertsDismiss = {
-            store.alertsCardVisible = false
-            notifier.show("We'll ask again in a week") { store.alertsCardVisible = true }
-        },
         onTxClick = { sheets.editingTxId = it.id },
         listState = listState,
         contentPadding = padding,
     )
 }
 
-private fun needsSummary(items: List<NeedsItem>): String {
-    val unread = items.count { it is NeedsItem.Unreadable }
-    val tag = items.count { it is NeedsItem.NewPayee || it is NeedsItem.Bulk }
-    val other = items.size - unread - tag
-    return listOfNotNull(
-        unread.takeIf { it > 0 }?.let { "$it couldn't read" },
-        tag.takeIf { it > 0 }?.let { "$it to tag" },
-        other.takeIf { it > 0 }?.let { "$it to check" },
-    ).joinToString(" · ")
+@Composable
+internal fun HistoryRoute(store: LedgerStore, sheets: SheetState, padding: PaddingValues) {
+    HistoryScreen(store.transactions, store.categories, onTxClick = { sheets.editingTxId = it.id }, contentPadding = padding)
 }
 
 @Composable
-internal fun HistoryRoute(store: DemoStore, sheets: SheetState, padding: PaddingValues) {
-    HistoryScreen(store.transactions, store.categories, store.monthSpentPaise, onTxClick = { sheets.editingTxId = it.id }, contentPadding = padding)
-}
-
-@Composable
-internal fun SettingsRoute(store: DemoStore, notifier: Notifier, sheets: SheetState, padding: PaddingValues, onOpenOwed: () -> Unit) {
+internal fun SettingsRoute(store: LedgerStore, notifier: Notifier, sheets: SheetState, padding: PaddingValues, onOpenOwed: () -> Unit) {
     val context = LocalContext.current
     SettingsScreen(
         state = SettingsState(
             limitPaise = store.limitPaise,
-            automatic = store.automatic,
-            limitAlerts = store.limitAlerts,
-            lentReminder = store.lentReminder,
-            scenario = store.scenario,
             darkOverride = store.darkOverride,
-            dynamicColor = store.dynamicColor,
-            supportsDynamicColor = supportsDynamicColor,
-            showDesignPreview = BuildConfig.DEBUG,
         ),
         onEditLimit = { sheets.editingLimit = true },
-        onToggleMode = {
-            store.automatic = !store.automatic
-            notifier.show(if (store.automatic) "Automatic mode: reading bank SMS" else "Manual mode: captured transactions stay")
-        },
-        onLimitAlerts = { store.limitAlerts = it },
-        onLentReminder = { store.lentReminder = it },
         onOpenOwed = onOpenOwed,
-        onScenario = store::applyScenario,
-        onDarkOverride = { store.darkOverride = it },
-        onDynamicColor = { store.dynamicColor = it },
-        onReplayOnboarding = { store.onboarded = false },
+        onDarkOverride = store::changeTheme,
         onAddWidget = { if (!requestPinWidget(context)) notifier.show("Your launcher can't add widgets this way. Long-press the home screen → Widgets.") },
-        onNotBuilt = { notifier.show("$it isn't in this preview yet") },
+        onDeleteAll = store::deleteAll,
         contentPadding = padding,
     )
 }
 
 /** Runs a store action and offers Undo, which restores everything the action changed. */
-internal fun DemoStore.act(notifier: Notifier, action: DemoStore.() -> String) {
+internal fun LedgerStore.act(notifier: Notifier, action: LedgerStore.() -> String) {
     val before = snapshot()
     val message = action()
     if (message.isNotEmpty()) notifier.show(message) { restore(before) }
 }
 
 @Composable
-internal fun NeedsRoute(store: DemoStore, notifier: Notifier, sheets: SheetState, onBack: () -> Unit) {
+internal fun NeedsRoute(store: LedgerStore, notifier: Notifier, sheets: SheetState, onBack: () -> Unit) {
     NeedsYouScreen(
         items = store.needs,
         categories = store.categories,
@@ -161,7 +116,7 @@ internal fun NeedsRoute(store: DemoStore, notifier: Notifier, sheets: SheetState
 }
 
 @Composable
-internal fun OwedRoute(store: DemoStore, notifier: Notifier, onBack: () -> Unit) {
+internal fun OwedRoute(store: LedgerStore, notifier: Notifier, onBack: () -> Unit) {
     OwedScreen(
         debtors = store.debtors,
         onBack = onBack,
@@ -171,7 +126,7 @@ internal fun OwedRoute(store: DemoStore, notifier: Notifier, onBack: () -> Unit)
 }
 
 @Composable
-internal fun AppSheets(store: DemoStore, notifier: Notifier, sheets: SheetState) {
+internal fun AppSheets(store: LedgerStore, notifier: Notifier, sheets: SheetState) {
     if (sheets.adding) {
         AddExpenseSheet(
             categories = store.categories,
@@ -185,13 +140,13 @@ internal fun AppSheets(store: DemoStore, notifier: Notifier, sheets: SheetState)
     if (sheets.editingLimit) {
         LimitSheet(store.limitPaise, onDismiss = { sheets.editingLimit = false }) { paise ->
             val previous = store.limitPaise
-            store.limitPaise = paise
+            store.changeLimit(paise)
             sheets.editingLimit = false
-            notifier.show("Daily limit is now ${formatRupees(paise)}") { store.limitPaise = previous }
+            notifier.show("Daily limit is now ${formatRupees(paise)}") { store.changeLimit(previous) }
         }
     }
     store.transactions.firstOrNull { it.id == sheets.editingTxId }?.let { tx ->
-        fun close(action: DemoStore.() -> String) {
+        fun close(action: LedgerStore.() -> String) {
             sheets.editingTxId = null
             store.act(notifier, action)
         }

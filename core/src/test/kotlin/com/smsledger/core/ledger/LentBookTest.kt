@@ -57,4 +57,14 @@ class LentBookTest {
         val book = LentBook().lend("Arjun", 30_000, day).writeOff("Arjun", day).lend("Arjun", 10_000, day)
         assertEquals(10_000L, book.outstanding("Arjun"))
     }
+
+    @Test
+    fun `a book rebuilt from all its debts is the same book`() {
+        val book = LentBook()
+            .lend("Asha", 50_000, LocalDate.of(2026, 10, 1))
+            .repay("asha", 20_000, LocalDate.of(2026, 10, 3)).first
+            .lend("Ravi", 10_000, LocalDate.of(2026, 10, 2))
+            .writeOff("Ravi", LocalDate.of(2026, 10, 4))
+        assertEquals(book, LentBook.of(book.all))
+    }
 }

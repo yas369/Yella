@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.room)
 }
 
 android {
@@ -33,6 +35,11 @@ android {
     }
 }
 
+// Exported so every schema change ships with a migration (tasks/todo.md T6).
+room {
+    schemaDirectory("$projectDir/schemas")
+}
+
 kotlin {
     compilerOptions {
         // Expressive and layout APIs are still marked experimental; opted in once here rather than per file.
@@ -58,6 +65,9 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
     implementation(libs.glance.appwidget)
     implementation(libs.glance.material3)
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
 
     testImplementation(libs.junit)
 }

@@ -11,17 +11,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.CallMade
 import androidx.compose.material.icons.automirrored.outlined.CallReceived
-import androidx.compose.material.icons.outlined.Block
-import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -39,6 +34,8 @@ import com.smsledger.ui.components.Emphasis
 import com.smsledger.ui.model.NeedsItem
 import com.smsledger.ui.theme.MoneyStyles
 import com.smsledger.ui.theme.Space
+import com.smsledger.ui.theme.LedgerTheme
+import com.smsledger.ui.components.LedgerChip
 
 /** Teach a message (flows.md §7a): direction → tap the amount → done. Back steps back, keeping answers. */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -54,7 +51,7 @@ fun TeachSheet(
     val candidates = amountCandidates(item.body)
     BackHandler(enabled = direction != null && amount == null) { direction = null }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = LedgerTheme.colors.surface, tonalElevation = 0.dp) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = Space.Gutter).navigationBarsPadding().padding(bottom = Space.L),
             verticalArrangement = Arrangement.spacedBy(Space.L),
@@ -65,7 +62,7 @@ fun TeachSheet(
                 else -> 2
             }
             if (step < 2) {
-                Text("Step ${step + 1} of 2", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.tertiary)
+                Text("Step ${step + 1} of 2", style = MaterialTheme.typography.bodySmall, color = LedgerTheme.colors.textSecondary)
                 MessageBubble(item.sender, item.body)
             }
             AnimatedContent(step, label = "teachStep") { current ->
@@ -73,35 +70,28 @@ fun TeachSheet(
                     when (current) {
                         0 -> {
                             Text("Is this money going out or coming in?", style = MaterialTheme.typography.titleLarge)
-                            Spacer(Modifier.height(Space.XS))
                             ConnectedChoice(
                                 options = listOf("Money out", "Money in"),
                                 selectedIndex = null,
                                 onSelect = { direction = if (it == 0) "out" else "in" },
                                 icons = listOf(Icons.AutoMirrored.Outlined.CallMade, Icons.AutoMirrored.Outlined.CallReceived),
-                                modifier = Modifier.height(56.dp),
                             )
-                            BigChoice("Neither, ignore messages like this", onIgnoreLikeThis, emphasis = Emphasis.Outline, icon = Icons.Outlined.Block)
+                            BigChoice("Not a transaction. Ignore messages like this", onIgnoreLikeThis, emphasis = Emphasis.Quiet)
                         }
                         1 -> {
                             Text("Which number is the amount?", style = MaterialTheme.typography.titleLarge)
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.S)) {
                                 candidates.forEach { value ->
-                                    SuggestionChip(
-                                        onClick = { amount = value },
-                                        label = { Text(value, style = MoneyStyles.Row) },
-                                        modifier = Modifier.height(48.dp),
-                                    )
+                                    LedgerChip("₹$value", selected = false) { amount = value }
                                 }
                             }
                         }
                         else -> {
-                            Icon(Icons.Outlined.TaskAlt, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp))
-                            Text("Got it", style = MaterialTheme.typography.headlineSmall)
+                            Text("₹${amount.orEmpty()} ${if (direction == "in") "in" else "out"}", style = MoneyStyles.Title)
                             Text(
-                                "Messages like this will be read automatically from now on. You can undo this in Settings → Learned messages.",
+                                "Messages like this are now read automatically. Undo it any time in Settings, Learned messages.",
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = LedgerTheme.colors.textSecondary,
                             )
                             Spacer(Modifier.height(Space.S))
                             BigChoice("Done", {

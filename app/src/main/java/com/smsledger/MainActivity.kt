@@ -12,17 +12,20 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.DisposableEffect
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.smsledger.ui.SmsLedgerApp
-import com.smsledger.ui.demo.DemoStore
+import androidx.lifecycle.lifecycleScope
+import com.smsledger.data.LedgerStore
+import kotlinx.coroutines.launch
 import com.smsledger.ui.theme.SmsLedgerTheme
 
 class MainActivity : ComponentActivity() {
 
-    // Design preview: sample data only. Room-backed state replaces DemoStore from T6.
-    private val store = DemoStore()
+    private val store: LedgerStore get() = (application as SmsLedgerApplication).store
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+        // Keep the splash up until the ledger has been read from disk, so no empty state flashes.
+        installSplashScreen().setKeepOnScreenCondition { !store.loaded }
         super.onCreate(savedInstanceState)
+        if (!store.loaded) lifecycleScope.launch { store.load() }
         handle(intent)
         enableEdgeToEdge()
         setContent {
@@ -33,8 +36,8 @@ class MainActivity : ComponentActivity() {
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
                 onDispose {}
             }
-            SmsLedgerTheme(darkTheme = dark, dynamicColor = store.dynamicColor) {
-                SmsLedgerApp(store)
+            SmsLedgerTheme(darkTheme = dark) {
+                if (store.loaded) SmsLedgerApp(store)
             }
         }
     }

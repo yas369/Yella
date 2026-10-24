@@ -1,6 +1,12 @@
 package com.smsledger.ui.model
 
-/** UI-facing models. Real data (T6+) maps into these; screens never see Room entities. */
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
+import java.util.Locale
+
+/** UI-facing models. Stored data maps into these; screens never see Room entities. */
 
 enum class TxKind { Spend, Income, Transfer, Lent }
 
@@ -10,9 +16,7 @@ data class Tx(
     val id: Long,
     val payee: String,
     val account: String,
-    val time: String,
-    /** 0 = today, 1 = yesterday, … */
-    val daysAgo: Int,
+    val at: LocalDateTime,
     val amountPaise: Long,
     val kind: TxKind,
     val categoryId: String? = null,
@@ -20,19 +24,31 @@ data class Tx(
     val note: String = "",
     /** Marked "not a transaction" (§10): stays in history, never counted. */
     val excluded: Boolean = false,
-)
+) {
+    val date: LocalDate get() = at.toLocalDate()
 
-data class DiscoveredAccount(
-    val id: String,
-    val name: String,
-    val detail: String,
-    val evidence: String,
-    val isWallet: Boolean = false,
-)
+    /** "9:12 am" */
+    val time: String get() = at.format(TimeFormat).lowercase(Locale.ENGLISH)
+
+    /** 0 = today, 1 = yesterday, … */
+    val daysAgo: Int get() = ChronoUnit.DAYS.between(date, LocalDate.now()).toInt()
+}
+
+private val TimeFormat = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)
+
+/** design.md §8 dates: "Today", "Yesterday", then "12 Sep"; the year only when it isn't this year. */
+fun dayLabel(date: LocalDate, today: LocalDate = LocalDate.now()): String = when (date) {
+    today -> "Today"
+    today.minusDays(1) -> "Yesterday"
+    else -> date.format(DateTimeFormatter.ofPattern(if (date.year == today.year) "d MMM" else "d MMM yyyy", Locale.ENGLISH))
+}
 
 /** Everything uncertain (§15.2). Each item carries what the ledger needs once the user answers. */
 sealed interface NeedsItem {
     val id: Long
+
+    /** The SMS that raised the question. Every decision card shows it (design.md §6). */
+    val sms: String
 
     /** A confirmed sender's message the parser couldn't read (§7). Teaching it adds the transaction. */
     data class Unreadable(
@@ -42,7 +58,9 @@ sealed interface NeedsItem {
         val account: String,
         val payee: String,
         val daysAgo: Int,
-    ) : NeedsItem
+    ) : NeedsItem {
+        override val sms: String get() = body
+    }
 
     /** 3-digit mask that fits more than one known account (§4). Picking one adds the transaction. */
     data class WhichAccount(
@@ -52,6 +70,7 @@ sealed interface NeedsItem {
         val daysAgo: Int,
         val payee: String,
         val options: List<String>,
+        override val sms: String,
     ) : NeedsItem
 
     /** Debit + credit between own accounts, amounts within fee tolerance (§9). Both rows exist already. */
@@ -62,13 +81,21 @@ sealed interface NeedsItem {
         val outLine: String,
         val inLine: String,
         val gap: String,
+        override val sms: String,
     ) : NeedsItem
 
     /** First debit from a payee with no category rule yet (§11). */
-    data class NewPayee(override val id: Long, val txId: Long, val payee: String, val amountPaise: Long, val whenLabel: String) : NeedsItem
+    data class NewPayee(
+        override val id: Long,
+        val txId: Long,
+        val payee: String,
+        val amountPaise: Long,
+        val whenLabel: String,
+        override val sms: String,
+    ) : NeedsItem
 
     /** Several untagged debits from one payee: one answer tags them all (§15.5). */
-    data class Bulk(override val id: Long, val payee: String) : NeedsItem
+    data class Bulk(override val id: Long, val payee: String, override val sms: String) : NeedsItem
 }
 
 data class LentEntry(val label: String, val amountPaise: Long, val isRepayment: Boolean = false)

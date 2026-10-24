@@ -1,151 +1,135 @@
 package com.smsledger.ui.today
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import com.smsledger.core.limit.LimitStatus
 import com.smsledger.core.money.formatRupeesWhole
+import com.smsledger.ui.components.Emphasis
+import com.smsledger.ui.components.LedgerButton
 import com.smsledger.ui.components.LimitHero
+import com.smsledger.ui.components.RowDivider
 import com.smsledger.ui.components.SectionHeader
 import com.smsledger.ui.components.TransactionRow
 import com.smsledger.ui.model.Category
 import com.smsledger.ui.model.Tx
-import com.smsledger.ui.theme.MoneyStyles
+import com.smsledger.ui.theme.LedgerTheme
+import com.smsledger.ui.theme.Size
 import com.smsledger.ui.theme.Space
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
-/** Everything Today needs, already computed. Real data arrives in T7. */
+/** How many rows Home shows before "See all" (§7). */
+const val RECENT_ROWS = 10
+
+/** Everything Home needs, already computed. */
 data class TodayState(
     val status: LimitStatus,
     val spentPaise: Long,
     val limitPaise: Long,
-    val transactions: List<Tx>,
+    /** Newest first; Home shows the first [RECENT_ROWS]. */
+    val recent: List<Tx>,
     val needsCount: Int,
-    val needsSummary: String,
-    val owedPaise: Long,
-    val owedPeople: Int,
     val monthSpentPaise: Long,
-    val showAlertsCard: Boolean,
-    val manualMode: Boolean,
 )
 
-/** Home (flows.md §5): the answer with zero taps, then only what needs attention. */
+/**
+ * Home (design.md §7), top to bottom and nothing else: the day's answer, the month in one line,
+ * the review entry (only when there is something to review), recent rows.
+ */
 @Composable
 fun TodayScreen(
     state: TodayState,
     categoryOf: (String?) -> Category?,
     onOpenNeeds: () -> Unit,
-    onOpenOwed: () -> Unit,
     onOpenHistory: () -> Unit,
-    onAlertsTurnOn: () -> Unit,
-    onAlertsDismiss: () -> Unit,
     onTxClick: (Tx) -> Unit,
     listState: LazyListState,
     contentPadding: PaddingValues,
 ) {
     val today = LocalDate.now()
-    // No top app bar: the hero is the title. The list scrolls under the status bar (edge-to-edge).
+    val c = LedgerTheme.colors
     LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = contentPadding) {
         item(key = "statusBar") { Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars)) }
-        item(key = "date") {
-            Text(
-                today.format(DateTimeFormatter.ofPattern("EEEE, d MMMM")),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = Space.Gutter, end = Space.Gutter, top = Space.XL),
-            )
-        }
         item(key = "hero") {
-            LimitHero(
-                state.status, state.spentPaise, state.limitPaise,
-                Modifier.padding(horizontal = Space.Gutter, vertical = Space.M),
-            )
-        }
-        item(key = "cards") {
-            Column(
-                Modifier.padding(horizontal = Space.Gutter).padding(top = Space.L),
-                verticalArrangement = Arrangement.spacedBy(Space.S),
-            ) {
-                if (state.manualMode) ManualModeNote()
-                if (state.needsCount > 0) NeedsBanner(state.needsCount, state.needsSummary, onOpenNeeds)
-                if (state.showAlertsCard) AlertsCard(onAlertsTurnOn, onAlertsDismiss)
-                if (state.owedPaise > 0) OwedCard(state.owedPaise, state.owedPeople, onOpenOwed)
-            }
-        }
-        item(key = "todayHeader") {
-            SectionHeader("Today")
-        }
-        if (state.transactions.isEmpty()) {
-            item(key = "empty") { EmptyDay() }
-        } else {
-            items(state.transactions, key = { it.id }) { tx ->
-                TransactionRow(tx, categoryOf(tx.categoryId), onClick = { onTxClick(tx) }, modifier = Modifier.animateItem())
+            Column(Modifier.padding(start = Space.Gutter, end = Space.Gutter, top = Space.XL, bottom = Space.XL)) {
+                Text(today.format(DateTimeFormatter.ofPattern("EEEE, d MMM")), style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
+                Spacer(Modifier.height(Space.S))
+                LimitHero(state.status, state.spentPaise, state.limitPaise)
             }
         }
         item(key = "month") {
-            HorizontalDivider(Modifier.padding(horizontal = Space.Gutter, vertical = Space.S), color = MaterialTheme.colorScheme.outlineVariant)
-            MonthLine(today, state.monthSpentPaise, onOpenHistory)
-            Spacer(Modifier.height(96.dp))
-        }
-    }
-}
-
-@Composable
-private fun EmptyDay() {
-    Column(
-        Modifier.fillMaxWidth().padding(horizontal = Space.Gutter, vertical = Space.XXL),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text("No spending yet today", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(Space.XS))
-        Text(
-            "Payments show up here as your bank messages arrive.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-    }
-}
-
-@Composable
-private fun MonthLine(today: LocalDate, spentPaise: Long, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = Space.Gutter, vertical = Space.L),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
+            RowDivider()
             Text(
-                today.format(DateTimeFormatter.ofPattern("MMMM")),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                "${formatRupeesWhole(state.monthSpentPaise)} spent in ${today.format(DateTimeFormatter.ofPattern("MMMM"))}",
+                style = MaterialTheme.typography.bodyLarge.copy(fontFeatureSettings = "tnum"),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onOpenHistory)
+                    .defaultMinSize(minHeight = Size.Row)
+                    .padding(horizontal = Space.Gutter, vertical = Space.L),
             )
-            Text("${formatRupeesWhole(spentPaise)} spent", style = MoneyStyles.Row.copy(fontSize = MaterialTheme.typography.titleLarge.fontSize))
         }
-        Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = "Open history", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        item(key = "needs") {
+            AnimatedVisibility(
+                state.needsCount > 0,
+                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec()),
+                exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()) + shrinkVertically(MaterialTheme.motionScheme.defaultSpatialSpec()),
+            ) {
+                Column {
+                    RowDivider()
+                    NeedsEntryRow(state.needsCount, onOpenNeeds)
+                }
+            }
+        }
+        item(key = "recentHeader") {
+            RowDivider()
+            SectionHeader("Recent")
+        }
+        val recent = state.recent.take(RECENT_ROWS)
+        if (recent.isEmpty()) {
+            item(key = "empty") {
+                Text(
+                    "No transactions yet. Tap + to add one.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = c.textSecondary,
+                    modifier = Modifier.padding(horizontal = Space.Gutter, vertical = Space.S),
+                )
+            }
+        } else {
+            itemsIndexed(recent, key = { _, tx -> tx.id }) { index, tx ->
+                Column(Modifier.animateItem()) {
+                    if (index > 0) RowDivider()
+                    TransactionRow(tx, categoryOf(tx.categoryId), onClick = { onTxClick(tx) }, showDay = true)
+                }
+            }
+            item(key = "seeAll") {
+                RowDivider()
+                LedgerButton("See all", onOpenHistory, Modifier.padding(horizontal = Space.S, vertical = Space.S), Emphasis.Text)
+            }
+        }
+        // Room for the add button so it never covers the last row.
+        item(key = "fabSpace") { Spacer(Modifier.height(Size.Row + Space.XXL)) }
     }
 }

@@ -14,5 +14,5 @@ captures/
 *.aab
 
 # SMS corpus exports: never commit real messages
-data/
+/data/
 *.sms.xml
