@@ -53,6 +53,36 @@ object SenderClassifier {
 data class Account(val brand: String, val digits: String) {
     /** Stable key, e.g. `HDFCBK|4821`, `AMAZONPAY|WALLET`. */
     val key: String get() = "$brand|$digits"
+
+    val isWallet: Boolean get() = digits == WALLET
+
+    /** "HDFC Bank ••4821", "Amazon Pay" (design.md §8: masks written as ••1234). */
+    val label: String get() = if (isWallet) WalletRegistry.label(brand) else "${BankNames.name(brand)} ••$digits"
+
+    /** Short form for rows: "HDFC ••4821". */
+    val shortLabel: String get() = if (isWallet) WalletRegistry.label(brand) else "${BankNames.short(brand)} ••$digits"
+
+    companion object {
+        const val WALLET = "WALLET"
+
+        fun fromKey(key: String): Account? = key.split('|').takeIf { it.size == 2 }?.let { Account(it[0], it[1]) }
+    }
+}
+
+/** Display names for common bank sender brands. Unknown brands show as sent. */
+object BankNames {
+    private val NAMES = listOf(
+        "HDFC" to ("HDFC Bank" to "HDFC"), "ICICI" to ("ICICI Bank" to "ICICI"), "SBI" to ("SBI" to "SBI"),
+        "AXIS" to ("Axis Bank" to "Axis"), "KOTAK" to ("Kotak Bank" to "Kotak"), "CUBANK" to ("City Union Bank" to "CUB"),
+        "IDFC" to ("IDFC First Bank" to "IDFC"), "YESBNK" to ("Yes Bank" to "Yes"), "PNB" to ("Punjab National Bank" to "PNB"),
+        "BOB" to ("Bank of Baroda" to "BoB"), "CANBNK" to ("Canara Bank" to "Canara"), "INDUS" to ("IndusInd Bank" to "IndusInd"),
+        "FEDBNK" to ("Federal Bank" to "Federal"), "UNIONB" to ("Union Bank" to "Union"), "IOB" to ("Indian Overseas Bank" to "IOB"),
+    )
+
+    private fun find(brand: String) = NAMES.firstOrNull { brand.uppercase().contains(it.first) }?.second
+
+    fun name(brand: String): String = find(brand)?.first ?: brand
+    fun short(brand: String): String = find(brand)?.second ?: brand
 }
 
 sealed interface AccountMatch {
