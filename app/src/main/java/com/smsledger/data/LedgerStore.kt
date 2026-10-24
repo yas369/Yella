@@ -13,6 +13,9 @@ import com.smsledger.core.ledger.LedgerEntry
 import com.smsledger.core.ledger.LedgerMath
 import com.smsledger.core.ledger.LentBook
 import com.smsledger.core.ledger.LentEventKind
+import com.smsledger.core.limit.AlertPolicy
+import com.smsledger.core.limit.LimitAlert
+import com.smsledger.core.limit.limitStatus
 import com.smsledger.core.money.formatRupees
 import com.smsledger.core.money.formatRupeesWhole
 import com.smsledger.core.sms.Account
@@ -115,6 +118,15 @@ class LedgerStore(
         private set
     private var discoveryInbox: List<RawSms> = emptyList()
 
+    /** §13: daily-limit alerts and the lent reminder. */
+    var limitAlerts by mutableStateOf(true)
+        private set
+    var lentReminder by mutableStateOf(true)
+        private set
+    private var alertDay = 0L
+    private var alertsSent: Set<LimitAlert> = emptySet()
+    private var lentReminderMonth: YearMonth? = null
+
     /** Set when an answer needs part of the inbox read again (a new account confirmed as mine). */
     var rescanFromMillis by mutableStateOf<Long?>(null)
     var lentBook by mutableStateOf(LentBook())
@@ -135,6 +147,11 @@ class LedgerStore(
         darkOverride = prefs.darkOverride
         automatic = prefs.automatic
         lastScanMillis = prefs.lastScanMillis
+        limitAlerts = prefs.limitAlerts
+        lentReminder = prefs.lentReminder
+        alertDay = prefs.alertDay
+        alertsSent = prefs.alertsSent.split(',').mapNotNull { name -> LimitAlert.entries.firstOrNull { it.name == name } }.toSet()
+        lentReminderMonth = prefs.lentReminderMonth.takeIf { it.isNotEmpty() }?.let { runCatching { YearMonth.parse(it) }.getOrNull() }
         loaded = true
     }
 
@@ -142,7 +159,41 @@ class LedgerStore(
 
     // ---- Settings ------------------------------------------------------------------------------
 
-    private fun prefs() = Prefs(onboarded, limitPaise, darkOverride, automatic, lastScanMillis)
+    private fun prefs() = Prefs(
+        onboarded, limitPaise, darkOverride, automatic, lastScanMillis,
+        limitAlerts, lentReminder, alertDay, alertsSent.joinToString(",") { it.name }, lentReminderMonth?.toString().orEmpty(),
+    )
+
+    fun changeLimitAlerts(on: Boolean) {
+        limitAlerts = on
+        disk.savePrefs(prefs())
+    }
+
+    fun changeLentReminder(on: Boolean) {
+        lentReminder = on
+        disk.savePrefs(prefs())
+    }
+
+    /** §13: limit alerts due now (80% / 100%, each at most once a day). Marks them sent. */
+    fun dueLimitAlerts(): List<LimitAlert> {
+        if (!limitAlerts) return emptyList()
+        val day = today.toEpochDay()
+        if (day != alertDay) { alertDay = day; alertsSent = emptySet() }
+        val due = AlertPolicy.due(limitStatus(spentTodayPaise, limitPaise), alertsSent)
+        if (due.isNotEmpty()) {
+            alertsSent = alertsSent + due + (if (LimitAlert.Reached in due) setOf(LimitAlert.Near) else emptySet())
+            disk.savePrefs(prefs())
+        }
+        return due
+    }
+
+    /** §13: the lent reminder, on the 1st, once a month, only while someone owes you. Marks it sent. */
+    fun lentReminderDue(): Boolean {
+        if (!lentReminder || !AlertPolicy.lentReminderDue(today, lentReminderMonth, owedPaise)) return false
+        lentReminderMonth = YearMonth.from(today)
+        disk.savePrefs(prefs())
+        return true
+    }
 
     fun finishOnboarding(limitPaise: Long) {
         this.limitPaise = limitPaise
@@ -173,6 +224,11 @@ class LedgerStore(
         darkOverride = null
         automatic = false
         lastScanMillis = 0
+        limitAlerts = true
+        lentReminder = true
+        alertDay = 0
+        alertsSent = emptySet()
+        lentReminderMonth = null
         onboarded = false
     }
 

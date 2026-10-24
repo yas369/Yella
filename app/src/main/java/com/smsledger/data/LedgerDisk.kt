@@ -55,6 +55,14 @@ data class Prefs(
     val automatic: Boolean = false,
     /** Newest inbox message already scanned (epoch millis), for the catch-up scan. */
     val lastScanMillis: Long = 0,
+    /** §13 alerts: limit alerts at 80% / 100%, and the lent reminder on the 1st. */
+    val limitAlerts: Boolean = true,
+    val lentReminder: Boolean = true,
+    /** Day (epoch day) the [alertsSent] set belongs to; a new day starts empty. */
+    val alertDay: Long = 0,
+    val alertsSent: String = "",
+    /** "2026-11" when the lent reminder last went out. */
+    val lentReminderMonth: String = "",
 )
 
 /** Pre-filled in the first-run limit field; the user confirms or changes it. */
@@ -115,6 +123,11 @@ class RoomLedgerDisk(context: Context) : LedgerDisk {
             darkOverride = if (dark < 0) null else dark == 1,
             automatic = prefs.getBoolean(KEY_AUTOMATIC, false),
             lastScanMillis = prefs.getLong(KEY_LAST_SCAN, 0),
+            limitAlerts = prefs.getBoolean(KEY_LIMIT_ALERTS, true),
+            lentReminder = prefs.getBoolean(KEY_LENT_REMINDER, true),
+            alertDay = prefs.getLong(KEY_ALERT_DAY, 0),
+            alertsSent = prefs.getString(KEY_ALERTS_SENT, "").orEmpty(),
+            lentReminderMonth = prefs.getString(KEY_LENT_MONTH, "").orEmpty(),
         )
         return data to settings
     }
@@ -164,6 +177,11 @@ class RoomLedgerDisk(context: Context) : LedgerDisk {
             .putInt(KEY_DARK, when (prefs.darkOverride) { null -> -1; false -> 0; true -> 1 })
             .putBoolean(KEY_AUTOMATIC, prefs.automatic)
             .putLong(KEY_LAST_SCAN, prefs.lastScanMillis)
+            .putBoolean(KEY_LIMIT_ALERTS, prefs.limitAlerts)
+            .putBoolean(KEY_LENT_REMINDER, prefs.lentReminder)
+            .putLong(KEY_ALERT_DAY, prefs.alertDay)
+            .putString(KEY_ALERTS_SENT, prefs.alertsSent)
+            .putString(KEY_LENT_MONTH, prefs.lentReminderMonth)
             .apply()
     }
 
@@ -231,6 +249,11 @@ class RoomLedgerDisk(context: Context) : LedgerDisk {
     )
 
     private companion object {
+        const val KEY_LIMIT_ALERTS = "limit_alerts"
+        const val KEY_LENT_REMINDER = "lent_reminder"
+        const val KEY_ALERT_DAY = "alert_day"
+        const val KEY_ALERTS_SENT = "alerts_sent"
+        const val KEY_LENT_MONTH = "lent_reminder_month"
         const val KEY_AUTOMATIC = "automatic"
         const val KEY_LAST_SCAN = "last_scan_millis"
         const val KEY_ONBOARDED = "onboarded"

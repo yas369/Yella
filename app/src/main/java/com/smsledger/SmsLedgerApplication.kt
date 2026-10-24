@@ -4,6 +4,7 @@ import android.app.Application
 import com.smsledger.core.limit.limitStatus
 import com.smsledger.data.LedgerStore
 import com.smsledger.data.RoomLedgerDisk
+import com.smsledger.notify.LedgerNotifications
 import com.smsledger.sms.SmsAccess
 import com.smsledger.sms.SmsInbox
 import com.smsledger.widget.WidgetSnapshot
@@ -38,6 +39,7 @@ class SmsLedgerApplication : Application() {
         if (full) store.rescanFromMillis = null
         val spent = store.spentTodayPaise
         WidgetSnapshot.publish(this, limitStatus(spent, store.limitPaise), spent, store.limitPaise)
+        LedgerNotifications.postDue(this, store)
     }
 
     private companion object {

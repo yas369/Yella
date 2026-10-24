@@ -124,6 +124,7 @@ fun SmsLedgerApp(store: LedgerStore) {
     val spent = store.spentTodayPaise
     LaunchedEffect(spent, store.limitPaise) {
         WidgetSnapshot.publish(context, limitStatus(spent, store.limitPaise), spent, store.limitPaise)
+        com.smsledger.notify.LedgerNotifications.postDue(context, store)
     }
 
     // A new account confirmed as mine: read its past messages now (§4).

@@ -37,6 +37,10 @@ data class SettingsState(
     val automatic: Boolean = false,
     val accountCount: Int = 0,
     val templateCount: Int = 0,
+    val limitAlerts: Boolean = true,
+    val lentReminder: Boolean = true,
+    /** False when Android notifications are off for the app (design.md §9: a row here, never on Home). */
+    val notificationsAllowed: Boolean = true,
 )
 
 /** Settings (§7): plain rows separated by dividers, grouped under section titles. No icons. */
@@ -53,6 +57,8 @@ fun SettingsScreen(
     onTurnOffCapture: () -> Unit = {},
     onOpenAccounts: () -> Unit = {},
     onOpenTemplates: () -> Unit = {},
+    onLimitAlerts: (Boolean) -> Unit = {},
+    onLentReminder: (Boolean) -> Unit = {},
 ) {
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     var confirmManual by rememberSaveable { mutableStateOf(false) }
@@ -77,6 +83,30 @@ fun SettingsScreen(
                 }
                 row { Setting("Accounts", if (state.accountCount == 0) "None yet" else "${state.accountCount} found · Mine or Not mine", onClick = onOpenAccounts) }
                 row { Setting("Learned messages", if (state.templateCount == 0) "None yet" else "${state.templateCount} message formats", onClick = onOpenTemplates) }
+            }
+        }
+        item {
+            Group("Notifications") {
+                row {
+                    Setting(
+                        "Limit alerts",
+                        when {
+                            !state.limitAlerts -> "Off"
+                            !state.notificationsAllowed -> "Off in the phone's settings · tap to allow"
+                            else -> "On · at 80% and 100% of the daily limit, once a day"
+                        },
+                    ) { onLimitAlerts(!state.limitAlerts || !state.notificationsAllowed) }
+                }
+                row {
+                    Setting(
+                        "Lent reminder",
+                        when {
+                            !state.lentReminder -> "Off"
+                            !state.notificationsAllowed -> "Off in the phone's settings · tap to allow"
+                            else -> "On · on the 1st of each month, when someone owes you"
+                        },
+                    ) { onLentReminder(!state.lentReminder || !state.notificationsAllowed) }
+                }
             }
         }
         item {

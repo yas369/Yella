@@ -16,6 +16,12 @@ import com.smsledger.core.limit.limitStatus
 import com.smsledger.core.money.formatRupees
 import com.smsledger.data.LedgerStore
 import com.smsledger.sms.SmsAccess
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.remember
+import com.smsledger.notify.LedgerNotifications
 import com.smsledger.ui.history.HistoryScreen
 import com.smsledger.ui.model.Category
 import com.smsledger.ui.model.NeedsItem
@@ -78,6 +84,13 @@ internal fun HistoryRoute(store: LedgerStore, sheets: SheetState, padding: Paddi
 @Composable
 internal fun SettingsRoute(store: LedgerStore, notifier: Notifier, sheets: SheetState, padding: PaddingValues, onOpen: (Overlay) -> Unit) {
     val context = LocalContext.current
+    var allowed by remember { mutableStateOf(LedgerNotifications.permitted(context)) }
+    val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> allowed = granted }
+    // Turning an alert on is the moment to ask for notifications (Android 13+), never before.
+    fun enable(turnOn: Boolean, set: (Boolean) -> Unit) {
+        set(turnOn)
+        if (turnOn && !allowed && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
     SettingsScreen(
         state = SettingsState(
             limitPaise = store.limitPaise,
@@ -85,6 +98,9 @@ internal fun SettingsRoute(store: LedgerStore, notifier: Notifier, sheets: Sheet
             automatic = store.automatic && SmsAccess.granted(context),
             accountCount = store.accounts.size,
             templateCount = store.templates.size,
+            limitAlerts = store.limitAlerts,
+            lentReminder = store.lentReminder,
+            notificationsAllowed = allowed,
         ),
         onEditLimit = { sheets.editingLimit = true },
         onOpenOwed = { onOpen(Overlay.Owed) },
@@ -96,6 +112,8 @@ internal fun SettingsRoute(store: LedgerStore, notifier: Notifier, sheets: Sheet
         onTurnOffCapture = store::turnOffAutomatic,
         onOpenAccounts = { onOpen(Overlay.Accounts) },
         onOpenTemplates = { onOpen(Overlay.Templates) },
+        onLimitAlerts = { enable(it, store::changeLimitAlerts) },
+        onLentReminder = { enable(it, store::changeLentReminder) },
     )
 }
 
