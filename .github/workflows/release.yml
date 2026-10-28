@@ -1,0 +1,72 @@
+# Builds the signed `offline` APK and attaches it to a GitHub Release, so it can be downloaded
+# on a phone from https://github.com/yas369/Yella/releases.
+#
+# Trigger: push a tag like v0.2.0  (git tag v0.2.0 && git push origin v0.2.0)
+#
+# Needs four repository secrets (Settings → Secrets and variables → Actions):
+#   SIGNING_KEYSTORE_BASE64  the release keystore (.jks), base64-encoded
+#   SIGNING_STORE_PASSWORD   keystore password
+#   SIGNING_KEY_ALIAS        key alias
+#   SIGNING_KEY_PASSWORD     key password
+#
+# Only the `offline` build is published: Play Protect blocks the `sms` build when it is installed
+# from a downloaded file (see README "Builds").
+name: Release APK
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Check signing secrets
+        env:
+          KEYSTORE: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE" ]; then
+            echo "::error::SIGNING_KEYSTORE_BASE64 secret is missing. See the comment at the top of this file."
+            exit 1
+          fi
+
+      - name: Restore keystore
+        env:
+          KEYSTORE: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+        run: echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.jks"
+
+      - name: Test
+        run: ./gradlew :core:test testOfflineDebugUnitTest
+
+      - name: Build signed offline APK
+        env:
+          SIGNING_STORE_FILE: ${{ runner.temp }}/release.jks
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ./gradlew assembleOfflineRelease -PversionName="$VERSION" -PversionCode="${{ github.run_number }}"
+          mkdir -p dist
+          cp app/build/outputs/apk/offline/release/app-offline-release.apk "dist/Yella-$VERSION.apk"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.apk
+          body: |
+            **Install on Android:** tap `Yella-*.apk` below, open it, and allow installs from your browser if asked.
+
+            This is the offline build: manual entries, daily limit, categories, lent, history and widget. It reads no SMS, has no internet access and keeps everything on your phone.

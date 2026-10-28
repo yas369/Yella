@@ -13,8 +13,23 @@ android {
         applicationId = "com.smsledger"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // CI passes -PversionCode / -PversionName from the release tag (.github/workflows/release.yml).
+        versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
+        versionName = (findProperty("versionName") as String?) ?: "0.1.0"
+    }
+
+    // Release signing comes only from environment variables (GitHub Actions secrets). The keystore
+    // and passwords are never in the repo. Without them, release builds are left unsigned.
+    val releaseStore = System.getenv("SIGNING_STORE_FILE")
+    signingConfigs {
+        if (releaseStore != null) {
+            create("release") {
+                storeFile = file(releaseStore)
+                storePassword = System.getenv("SIGNING_STORE_PASSWORD")
+                keyAlias = System.getenv("SIGNING_KEY_ALIAS")
+                keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+            }
+        }
     }
 
     // Two builds from one codebase (README "Builds"). Same applicationId and key, so installing
@@ -36,6 +51,7 @@ android {
 
     buildTypes {
         release {
+            if (releaseStore != null) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
         }

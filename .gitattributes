@@ -1,0 +1,4 @@
+# Unix scripts must keep LF so CI (Linux) can run them.
+gradlew text eol=lf
+*.sh text eol=lf
+*.bat text eol=crlf
