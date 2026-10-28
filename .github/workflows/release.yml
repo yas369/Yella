@@ -1,5 +1,7 @@
-# Builds the signed `offline` APK and attaches it to a GitHub Release, so it can be downloaded
-# on a phone from https://github.com/yas369/Yella/releases.
+# Builds signed APKs and attaches them to a GitHub Release. Fixed file names give permanent
+# direct-download links that always fetch the newest version:
+#   https://github.com/yas369/Yella/releases/latest/download/Yella.apk       (offline build)
+#   https://github.com/yas369/Yella/releases/latest/download/Yella-sms.apk   (automatic SMS capture)
 #
 # Trigger: push a tag like v0.2.0  (git tag v0.2.0 && git push origin v0.2.0)
 #
@@ -9,8 +11,9 @@
 #   SIGNING_KEY_ALIAS        key alias
 #   SIGNING_KEY_PASSWORD     key password
 #
-# Only the `offline` build is published: Play Protect blocks the `sms` build when it is installed
-# from a downloaded file (see README "Builds").
+# Play Protect may block Yella-sms.apk when it is installed from a downloaded file, on phones and
+# in regions where its sideloading protection is active (see README "Builds"). Yella.apk declares
+# no SMS permissions and installs normally.
 name: Release APK
 
 on:
@@ -48,9 +51,9 @@ jobs:
         run: echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.jks"
 
       - name: Test
-        run: ./gradlew :core:test testOfflineDebugUnitTest
+        run: ./gradlew :core:test testOfflineDebugUnitTest testSmsDebugUnitTest
 
-      - name: Build signed offline APK
+      - name: Build signed APKs
         env:
           SIGNING_STORE_FILE: ${{ runner.temp }}/release.jks
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
@@ -58,15 +61,19 @@ jobs:
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          ./gradlew assembleOfflineRelease -PversionName="$VERSION" -PversionCode="${{ github.run_number }}"
+          ./gradlew assembleOfflineRelease assembleSmsRelease -PversionName="$VERSION" -PversionCode="${{ github.run_number }}"
           mkdir -p dist
-          cp app/build/outputs/apk/offline/release/app-offline-release.apk "dist/Yella-$VERSION.apk"
+          cp app/build/outputs/apk/offline/release/app-offline-release.apk dist/Yella.apk
+          cp app/build/outputs/apk/sms/release/app-sms-release.apk dist/Yella-sms.apk
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*.apk
           body: |
-            **Install on Android:** tap `Yella-*.apk` below, open it, and allow installs from your browser if asked.
+            **Install on Android (8.0 or newer):** tap an APK below, open it, and allow installs from your browser if asked.
 
-            This is the offline build: manual entries, daily limit, categories, lent, history and widget. It reads no SMS, has no internet access and keeps everything on your phone.
+            - **Yella.apk**: manual entries, daily limit, categories, lent, history, widget and alerts. Reads no SMS. Installs on any phone.
+            - **Yella-sms.apk**: everything above plus automatic reading of bank SMS, only after you allow it in the app. Google Play Protect may block this file on some phones because it asks for SMS access; if it does, use Yella.apk.
+
+            Both: no internet access, no account, everything stays on your phone.
