@@ -25,7 +25,9 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    # Pinned: this image ships the Android SDK (ANDROID_HOME set, licences accepted), so no
+    # separate SDK set-up step is needed. Gradle downloads any missing platform or build-tools.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -34,7 +36,8 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - uses: android-actions/setup-android@v3
+      - name: Accept Android SDK licences
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
       - name: Check signing secrets
         env:
