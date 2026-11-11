@@ -2,6 +2,7 @@ package com.smsledger
 
 import android.app.Application
 import com.smsledger.core.limit.limitStatus
+import com.smsledger.core.sms.SmsDefaults
 import com.smsledger.data.LedgerStore
 import com.smsledger.data.RoomLedgerDisk
 import com.smsledger.notify.LedgerNotifications
@@ -25,8 +26,8 @@ class SmsLedgerApplication : Application() {
     private val scanLock = Mutex()
 
     /**
-     * Catch-up scan (§2, plan T12): reads inbox messages newer than the last scan (with a day of
-     * overlap, since ingest is idempotent) and ingests them. Also re-reads the whole inbox once
+     * Catch-up scan (§2, plan T12): reads inbox messages newer than the last scan (with three days
+     * of overlap for late deliveries, since ingest is idempotent) and ingests them. Also re-reads the whole inbox once
      * after a new account is confirmed as mine. Safe to call from anywhere; scans never overlap.
      */
     suspend fun catchUp() = scanLock.withLock {
@@ -43,6 +44,6 @@ class SmsLedgerApplication : Application() {
     }
 
     private companion object {
-        const val OVERLAP_MS = 24 * 60 * 60 * 1000L
+        const val OVERLAP_MS = SmsDefaults.CATCH_UP_OVERLAP_DAYS * 24 * 60 * 60 * 1000L
     }
 }

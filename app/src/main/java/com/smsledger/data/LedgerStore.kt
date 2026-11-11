@@ -646,9 +646,12 @@ class LedgerStore(
     private fun context(sms: RawSms, batch: List<Tx>): IngestContext {
         val near = (transactions.asSequence() + batch.asSequence()).filter { !it.excluded && it.kind != TxKind.Transfer }
         fun minutes(tx: Tx) = Duration.between(tx.at, sms.at).abs().toMinutes()
-        val recent = near
-            .filter { it.accountKey != null && minutes(it) <= SmsDefaults.TRANSFER_WINDOW_MINUTES }
-            .map { Candidate(it.id, it.amountPaise, it.direction(), it.at, it.accountKey!!, it.upiRef) }.toList()
+        // A day of SMS-backed rows: the matchers apply their own, shorter windows. Rows already linked
+        // as a self-transfer stay in, so a repeat alert for one is still recognised (logic.md §11.2).
+        val recent = (transactions.asSequence() + batch.asSequence())
+            .filter { !it.excluded && it.accountKey != null && minutes(it) <= SmsDefaults.DUPLICATE_WINDOW_HOURS * 60 }
+            .map { Candidate(it.id, it.amountPaise, it.direction(), it.at, it.accountKey!!, it.upiRef, linked = it.kind == TxKind.Transfer) }
+            .toList()
         val manual = near
             .filter { it.accountKey == null && it.account == MANUAL && minutes(it) <= SmsDefaults.MANUAL_MERGE_HOURS * 60 }
             .map { Candidate(it.id, it.amountPaise, it.direction(), it.at, MANUAL) }.toList()
@@ -681,7 +684,7 @@ class LedgerStore(
             }
             is Outcome.AskAccount -> {
                 needs += NeedsItem.WhichAccount(
-                    nextNeedId++, "${BankNames.short(outcome.brand)} ••${outcome.digits ?: "?"}", outcome.amountPaise, sms.at,
+                    nextNeedId++, "${BankNames.short(outcome.brand)} ••${outcome.digits?.takeLast(4) ?: "?"}", outcome.amountPaise, sms.at,
                     outcome.counterparty ?: BankNames.name(outcome.brand), outcome.candidates.map { it.shortLabel }, sms.body,
                     outcome.candidates.map { it.key }, outcome.direction == Direction.Credit, outcome.upiRef,
                 )

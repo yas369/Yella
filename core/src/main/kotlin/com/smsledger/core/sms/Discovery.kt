@@ -44,9 +44,15 @@ object SenderClassifier {
         else -> SenderKind.Ignored
     }
 
-    /** Distinct masked digits seen with an amount, in order of first appearance. */
-    fun accounts(brand: String, bodies: List<String>): List<String> =
-        bodies.filter { Patterns.hasAmount(it) }.flatMap { Patterns.allMaskedDigits(it) }.distinct()
+    /**
+     * Account digits seen in transaction-shaped messages only (§8.2), in order of first appearance.
+     * A shorter run that is the tail of a longer one ("821" and "4821") is the same account written
+     * two ways, so only the longer is listed.
+     */
+    fun accounts(brand: String, bodies: List<String>): List<String> {
+        val seen = bodies.filter { TransactionParser.parse(it) is ParseResult.Parsed }.flatMap { Patterns.allMaskedDigits(it) }.distinct()
+        return seen.filter { digits -> seen.none { it.length > digits.length && it.endsWith(digits) } }
+    }
 }
 
 /** An account the user confirmed as theirs: bank brand + masked digits, or a wallet keyed by brand. */
@@ -57,10 +63,10 @@ data class Account(val brand: String, val digits: String) {
     val isWallet: Boolean get() = digits == WALLET
 
     /** "HDFC Bank ••4821", "Amazon Pay" (design.md §8: masks written as ••1234). */
-    val label: String get() = if (isWallet) WalletRegistry.label(brand) else "${BankNames.name(brand)} ••$digits"
+    val label: String get() = if (isWallet) WalletRegistry.label(brand) else "${BankNames.name(brand)} ••${digits.takeLast(4)}"
 
-    /** Short form for rows: "HDFC ••4821". */
-    val shortLabel: String get() = if (isWallet) WalletRegistry.label(brand) else "${BankNames.short(brand)} ••$digits"
+    /** Short form for rows: "HDFC ••4821". Only the last four digits are ever shown (§8.1). */
+    val shortLabel: String get() = if (isWallet) WalletRegistry.label(brand) else "${BankNames.short(brand)} ••${digits.takeLast(4)}"
 
     companion object {
         const val WALLET = "WALLET"
@@ -91,14 +97,16 @@ sealed interface AccountMatch {
     data object Unknown : AccountMatch
 }
 
-/** §4 digit matching: 4 digits match directly; 3 digits only when exactly one account at that bank fits. */
+/**
+ * §8.0 / §8.1 digit matching at one sender: the same digits match directly; otherwise an account
+ * fits when one run ends with the other ("50100012344821" ~ "4821" ~ "821"). Exactly one fit is a
+ * match, several are ambiguous. Matching across senders is not done yet.
+ */
 object AccountMatcher {
     fun match(brand: String, digits: String, accounts: List<Account>): AccountMatch {
-        val atBank = accounts.filter { it.brand == brand }
+        val atBank = accounts.filter { it.brand == brand && !it.isWallet }
         atBank.firstOrNull { it.digits == digits }?.let { return AccountMatch.Matched(it) }
-        val fits = atBank.filter { acc ->
-            (digits.length == 3 && acc.digits.endsWith(digits)) || (acc.digits.length == 3 && digits.endsWith(acc.digits))
-        }
+        val fits = atBank.filter { Patterns.compatible(it.digits, digits) }
         return when (fits.size) {
             0 -> AccountMatch.Unknown
             1 -> AccountMatch.Matched(fits.single())

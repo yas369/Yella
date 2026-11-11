@@ -33,10 +33,37 @@ class MatchingTest {
     }
 
     @Test
-    fun `an exact debit and credit between own accounts close together pair automatically (spec 9)`() {
+    fun `the same UPI reference and equal amounts between own accounts link automatically (logic 12)`() {
+        val out = bank(1, 100_000, Direction.Debit, 0, account = "CUBANK|1234", ref = "629114830271")
+        val inn = bank(2, 100_000, Direction.Credit, 3, account = "HDFCBK|4821", ref = "629114830271")
+        assertEquals(Pairing(1, Confidence.Auto), TransferPairer.find(inn, listOf(out)))
+    }
+
+    @Test
+    fun `equal amounts without a shared reference are only a possible transfer`() {
         val out = bank(1, 100_000, Direction.Debit, 0, account = "CUBANK|1234")
         val inn = bank(2, 100_000, Direction.Credit, 3, account = "WALLET|AMAZONPAY")
-        assertEquals(Pairing(1, Confidence.Auto), TransferPairer.find(inn, listOf(out)))
+        assertEquals(Pairing(1, Confidence.Possible), TransferPairer.find(inn, listOf(out)))
+        val other = bank(3, 100_000, Direction.Credit, 3, account = "HDFCBK|4821", ref = "712345678901")
+        assertEquals(Pairing(1, Confidence.Possible), TransferPairer.find(other, listOf(out.copy(upiRef = "629114830271"))))
+    }
+
+    @Test
+    fun `the nearest candidate wins, and a row already linked is never paired again`() {
+        val far = bank(1, 100_000, Direction.Debit, 0, account = "CUBANK|1234")
+        val near = bank(2, 100_000, Direction.Debit, 8, account = "CUBANK|1234")
+        val inn = bank(3, 100_000, Direction.Credit, 10, account = "HDFCBK|4821")
+        assertEquals(2L, TransferPairer.find(inn, listOf(far, near))?.otherId)
+        assertNull(TransferPairer.find(inn, listOf(near.copy(linked = true))))
+    }
+
+    @Test
+    fun `a repeat alert has the same account, reference, amount and direction within a day (logic 11_2)`() {
+        val first = bank(1, 25_000, Direction.Debit, 0, ref = "629114830271")
+        assertEquals(true, DuplicateAlert.isDuplicate(bank(-1, 25_000, Direction.Debit, 600, ref = "629114830271"), listOf(first)))
+        assertEquals(false, DuplicateAlert.isDuplicate(bank(-1, 25_000, Direction.Debit, 25 * 60, ref = "629114830271"), listOf(first)))
+        assertEquals(false, DuplicateAlert.isDuplicate(bank(-1, 25_000, Direction.Debit, 5), listOf(first.copy(upiRef = null))))
+        assertEquals(false, DuplicateAlert.isDuplicate(bank(-1, 25_000, Direction.Debit, 5, account = "CUBANK|1234", ref = "629114830271"), listOf(first)))
     }
 
     @Test
@@ -47,12 +74,12 @@ class MatchingTest {
     }
 
     @Test
-    fun `too big a difference, same account, or over 2 hours is not a transfer`() {
+    fun `too big a difference, same account, or over 30 minutes is not a transfer`() {
         val inn = bank(9, 70_000, Direction.Credit, 5, account = "WALLET|AMAZONPAY")
         assertNull(TransferPairer.find(inn, listOf(bank(1, 100_000, Direction.Debit, 0, account = "CUBANK|1234"))))
         val sameAccount = bank(9, 100_000, Direction.Credit, 5, account = "CUBANK|1234")
         assertNull(TransferPairer.find(sameAccount, listOf(bank(1, 100_000, Direction.Debit, 0, account = "CUBANK|1234"))))
-        val late = bank(9, 100_000, Direction.Credit, 121, account = "WALLET|AMAZONPAY")
+        val late = bank(9, 100_000, Direction.Credit, 31, account = "WALLET|AMAZONPAY")
         assertNull(TransferPairer.find(late, listOf(bank(1, 100_000, Direction.Debit, 0, account = "CUBANK|1234"))))
     }
 

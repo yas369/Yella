@@ -46,6 +46,11 @@ object Templatizer {
         return Template(key, numbers)
     }
 
+    private val SLOT = Regex("""\{(?:DIGITS|AMT|PHONE|NUM|N)\}""")
+
+    /** The number placeholders of a template key, in order: two keys with the same slots keep their numbers in the same positions. */
+    fun slots(key: String): List<String> = SLOT.findAll(key).map { it.value }.toList()
+
     /** The amount at a learned number position, or null if this message has fewer numbers. */
     fun amountAt(template: Template, index: Int): Long? =
         template.numbers.getOrNull(index)?.text?.filter { it.isDigit() || it == '.' || it == ',' }?.let { Patterns.toPaise(it) }

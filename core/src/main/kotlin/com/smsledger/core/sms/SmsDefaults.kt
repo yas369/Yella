@@ -9,10 +9,14 @@ object SmsDefaults {
     const val LABEL_WINDOW_MINUTES = 30L
     /** A bank SMS merges with a manual entry within this window (§8 default "a few hours"). */
     const val MANUAL_MERGE_HOURS = 6L
-    /** Debit and credit between own accounts this close can be a self-transfer (§9). */
-    const val TRANSFER_WINDOW_MINUTES = 120L
-    /** Exact amount this close is paired without asking. */
-    const val AUTO_TRANSFER_MINUTES = 30L
+    /** Debit and credit between own accounts this close can be a self-transfer (logic.md §12). */
+    const val TRANSFER_WINDOW_MINUTES = 30L
+    /** A second alert with the same UPI reference this close is the same payment (logic.md §11.2). */
+    const val DUPLICATE_WINDOW_HOURS = 24L
+    /** A catch-up scan re-reads this far before the last scan, for late deliveries (logic.md §20). */
+    const val CATCH_UP_OVERLAP_DAYS = 3L
+    /** A message matches a learned template when this share of its words is the same (logic.md §9). */
+    const val TEMPLATE_OVERLAP = 0.8
     const val FEE_CAP_PAISE = 5_000L
     const val FEE_PERCENT = 2L
 
