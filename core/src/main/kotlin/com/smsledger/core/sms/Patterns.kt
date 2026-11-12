@@ -105,10 +105,16 @@ object Patterns {
 
     fun mentionsMoney(body: String): Boolean = hasAmount(body) || MONEY_WORDS.containsMatchIn(body)
 
+    /** Longest rupee figure read as money. Anything longer is a reference number, not an amount. */
+    private const val MAX_RUPEE_DIGITS = 12
+
+    /** Paise for a figure like "1,450.00". 0 when it is not a usable amount: callers treat 0 as "no amount". */
     fun toPaise(number: String): Long {
         val clean = number.replace(",", "")
-        val rupees = clean.substringBefore('.').ifEmpty { "0" }.toLong()
-        val paise = clean.substringAfter('.', "").padEnd(2, '0').take(2).toLong()
-        return rupees * 100 + paise
+        val rupees = clean.substringBefore('.').trimStart('0')
+        if (rupees.length > MAX_RUPEE_DIGITS) return 0
+        val whole = rupees.toLongOrNull() ?: if (rupees.isEmpty()) 0 else return 0
+        val paise = clean.substringAfter('.', "").padEnd(2, '0').take(2).toLongOrNull() ?: return 0
+        return whole * 100 + paise
     }
 }

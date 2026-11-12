@@ -4,7 +4,10 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyListState
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
+import com.smsledger.CrashLog
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import com.smsledger.widget.LedgerWidgetReceiver
@@ -87,6 +90,7 @@ internal fun HistoryRoute(store: LedgerStore, sheets: SheetState, padding: Paddi
 internal fun SettingsRoute(store: LedgerStore, notifier: Notifier, sheets: SheetState, padding: PaddingValues, onOpen: (Overlay) -> Unit) {
     val context = LocalContext.current
     var allowed by remember { mutableStateOf(LedgerNotifications.permitted(context)) }
+    var crashReport by remember { mutableStateOf(CrashLog.read(context)) }
     val askNotifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> allowed = granted }
     // Turning an alert on is the moment to ask for notifications (Android 13+), never before.
     fun enable(turnOn: Boolean, set: (Boolean) -> Unit) {
@@ -104,6 +108,7 @@ internal fun SettingsRoute(store: LedgerStore, notifier: Notifier, sheets: Sheet
             limitAlerts = store.limitAlerts,
             lentReminder = store.lentReminder,
             notificationsAllowed = allowed,
+            hasCrashReport = crashReport != null,
         ),
         onEditLimit = { sheets.editingLimit = true },
         onOpenOwed = { onOpen(Overlay.Owed) },
@@ -117,6 +122,16 @@ internal fun SettingsRoute(store: LedgerStore, notifier: Notifier, sheets: Sheet
         onOpenTemplates = { onOpen(Overlay.Templates) },
         onLimitAlerts = { enable(it, store::changeLimitAlerts) },
         onLentReminder = { enable(it, store::changeLentReminder) },
+        onOpenCategories = { onOpen(Overlay.Categories) },
+        onOpenPrivacy = { onOpen(Overlay.Privacy) },
+        onCopyCrash = {
+            crashReport?.let { report ->
+                context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("SMS Ledger crash report", report))
+                CrashLog.clear(context)
+                crashReport = null
+                notifier.show("Crash report copied")
+            }
+        },
     )
 }
 

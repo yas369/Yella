@@ -58,6 +58,8 @@ import com.smsledger.data.LedgerStore
 import com.smsledger.ui.onboarding.CaptureSetupFlow
 import com.smsledger.ui.onboarding.OnboardingFlow
 import com.smsledger.ui.settings.AccountsScreen
+import com.smsledger.ui.settings.CategoriesScreen
+import com.smsledger.ui.settings.PrivacyScreen
 import com.smsledger.ui.settings.TemplatesScreen
 import com.smsledger.widget.WidgetSnapshot
 import kotlinx.coroutines.CoroutineScope
@@ -71,7 +73,7 @@ enum class Tab(val label: String, val icon: ImageVector, val selectedIcon: Image
     Settings("Settings", Icons.Outlined.Settings, Icons.Filled.Settings),
 }
 
-enum class Overlay { None, Needs, Owed, Capture, Accounts, Templates }
+enum class Overlay { None, Needs, Owed, Capture, Accounts, Templates, Categories, Privacy }
 
 /** How long Undo stays on screen after a decision or edit (design.md §6). */
 private const val UNDO_MS = 5_000L
@@ -154,6 +156,8 @@ fun SmsLedgerApp(store: LedgerStore) {
             TemplatesScreen(store.templates.values.toList(), onBack = { overlay = Overlay.None }) { key -> store.act(notifier) { forgetTemplate(key) } }
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
         }
+        Overlay.Categories -> CategoriesScreen(store.categories, onBack = { overlay = Overlay.None }, onSet = store::setCountsDaily)
+        Overlay.Privacy -> PrivacyScreen(com.smsledger.BuildConfig.SMS_CAPTURE, onBack = { overlay = Overlay.None })
         Overlay.Needs, Overlay.Owed -> Box(Modifier.fillMaxSize()) {
             if (shown == Overlay.Needs) {
                 NeedsRoute(store, notifier, sheets, onBack = { overlay = Overlay.None })

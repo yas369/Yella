@@ -32,7 +32,7 @@ internal fun FilterToggleChip(label: String, value: String?, onOpen: () -> Unit,
         selected = value != null,
         modifier = Modifier.semantics { contentDescription = if (value != null) "$label: $value. Clear" else "Filter by ${label.lowercase()}" },
         trailingIcon = {
-            Icon(if (value != null) Icons.Outlined.Close else Icons.Outlined.ArrowDropDown, contentDescription = null, modifier = Modifier.size(18.dp))
+            Icon(if (value != null) Icons.Outlined.Close else Icons.Outlined.ArrowDropDown, contentDescription = null, modifier = Modifier.size(20.dp))
         },
         onClick = { if (value != null) onClear() else onOpen() },
     )

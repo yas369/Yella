@@ -68,6 +68,10 @@ private val WarningColor = ColorProvider(day = Color(0xFFB7791F), night = Color(
 private val OverColor = ColorProvider(day = Color(0xFFC2410C), night = Color(0xFFF08A5D))
 private val TextColor = ColorProvider(day = Color(0xFF1B1C1E), night = Color(0xFFE8E6E1))
 private val DividerColor = ColorProvider(day = Color(0xFFE3E0D8), night = Color(0xFF2A2E33))
+private val SurfaceColor = ColorProvider(day = Color(0xFFFFFFFF), night = Color(0xFF1B1E22))
+private val SecondaryColor = ColorProvider(day = Color(0xFF5E6166), night = Color(0xFF9A9C9F))
+private val AccentColor = ColorProvider(day = Color(0xFF2F45B5), night = Color(0xFF8FA2F2))
+private val OnAccentColor = ColorProvider(day = Color(0xFFFFFFFF), night = Color(0xFF0E1430))
 
 @Composable
 private fun WidgetContent(snapshot: WidgetSnapshot) {
@@ -82,8 +86,8 @@ private fun WidgetContent(snapshot: WidgetSnapshot) {
         GlanceModifier
             .fillMaxSize()
             .appWidgetBackground()
-            .background(GlanceTheme.colors.widgetBackground)
-            .cornerRadius(24.dp)
+            .background(SurfaceColor)
+            .cornerRadius(12.dp)
             .padding(horizontal = 16.dp, vertical = 12.dp)
             .clickable(actionStartActivity(Intent(context, MainActivity::class.java))),
         verticalAlignment = Alignment.CenterVertically,
@@ -92,16 +96,16 @@ private fun WidgetContent(snapshot: WidgetSnapshot) {
             Text(
                 snapshot.headline,
                 style = TextStyle(
-                    fontSize = 34.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (snapshot.level == LimitLevel.Over) OverColor else GlanceTheme.colors.onSurface,
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = levelColor,
                 ),
             )
             Spacer(GlanceModifier.width(8.dp))
             Text(
                 snapshot.label,
-                style = TextStyle(fontSize = 14.sp, color = GlanceTheme.colors.onSurfaceVariant),
-                modifier = GlanceModifier.padding(bottom = 6.dp),
+                style = TextStyle(fontSize = 14.sp, color = if (snapshot.level == LimitLevel.Over) OverColor else SecondaryColor),
+                modifier = GlanceModifier.padding(bottom = 4.dp),
             )
         }
         Spacer(GlanceModifier.height(8.dp))
@@ -112,22 +116,22 @@ private fun WidgetContent(snapshot: WidgetSnapshot) {
             backgroundColor = DividerColor,
         )
         if (tall) {
-            Spacer(GlanceModifier.height(10.dp))
+            Spacer(GlanceModifier.height(8.dp))
             Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     snapshot.detail,
-                    style = TextStyle(fontSize = 13.sp, color = GlanceTheme.colors.onSurfaceVariant),
+                    style = TextStyle(fontSize = 12.sp, color = SecondaryColor),
                     modifier = GlanceModifier.defaultWeight(),
                 )
                 Box(
                     GlanceModifier
-                        .size(40.dp)
-                        .cornerRadius(20.dp)
-                        .background(GlanceTheme.colors.primaryContainer)
+                        .size(48.dp)
+                        .cornerRadius(8.dp)
+                        .background(AccentColor)
                         .clickable(actionStartActivity(MainActivity.addExpenseIntent(context))),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("+", style = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Bold, color = GlanceTheme.colors.onPrimaryContainer))
+                    Text("+", style = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Medium, color = OnAccentColor))
                 }
             }
         }

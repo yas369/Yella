@@ -25,6 +25,11 @@ class SmsLedgerApplication : Application() {
 
     private val scanLock = Mutex()
 
+    override fun onCreate() {
+        super.onCreate()
+        CrashLog.install(this)
+    }
+
     /**
      * Catch-up scan (§2, plan T12): reads inbox messages newer than the last scan (with three days
      * of overlap for late deliveries, since ingest is idempotent) and ingests them. Also re-reads the whole inbox once

@@ -58,6 +58,9 @@ private const val NEW_PAYEE_DAYS = 30L
 /** This many untagged payments to one payee become one "Tag in one go" card (§15.5). */
 private const val BULK_MIN = 3
 
+/** Messages read per step of a first import, between pauses that let the screen draw. */
+private const val IMPORT_CHUNK = 250
+
 /** Starter categories every new install gets. Product defaults, not user data. */
 val DefaultCategories = listOf(
     Category("food", "Food"),
@@ -93,7 +96,9 @@ class LedgerStore(
     /** Set by the "Add expense" launcher shortcut / widget; the shell opens the Add sheet and clears it. */
     var pendingAdd by mutableStateOf(false)
 
-    val categories: List<Category> = DefaultCategories
+    /** The starter categories; which ones count toward the daily limit is the user's choice (design.md §7 Settings). */
+    var categories by mutableStateOf(DefaultCategories)
+        private set
     val transactions = mutableStateListOf<Tx>()
     /** Questions raised by SMS capture (§15.2). Saved, so nothing raised is lost on restart (§7). */
     val needs = mutableStateListOf<NeedsItem>()
@@ -151,6 +156,7 @@ class LedgerStore(
         lentReminder = prefs.lentReminder
         alertDay = prefs.alertDay
         alertsSent = prefs.alertsSent.split(',').mapNotNull { name -> LimitAlert.entries.firstOrNull { it.name == name } }.toSet()
+        categories = categoriesWith(prefs.notDaily)
         lentReminderMonth = prefs.lentReminderMonth.takeIf { it.isNotEmpty() }?.let { runCatching { YearMonth.parse(it) }.getOrNull() }
         loaded = true
     }
@@ -162,7 +168,21 @@ class LedgerStore(
     private fun prefs() = Prefs(
         onboarded, limitPaise, darkOverride, automatic, lastScanMillis,
         limitAlerts, lentReminder, alertDay, alertsSent.joinToString(",") { it.name }, lentReminderMonth?.toString().orEmpty(),
+        notDaily = categories.filterNot { it.countsDaily }.joinToString(",") { it.id },
     )
+
+    /** null = never changed: the product defaults (bills, rent and EMI don't count). */
+    private fun categoriesWith(notDaily: String?): List<Category> {
+        if (notDaily == null) return DefaultCategories
+        val ids = notDaily.split(',').toSet()
+        return DefaultCategories.map { it.copy(countsDaily = it.id !in ids) }
+    }
+
+    /** Settings → Categories: whether spending in a category counts toward the daily limit. */
+    fun setCountsDaily(categoryId: String, counts: Boolean) {
+        categories = categories.map { if (it.id == categoryId) it.copy(countsDaily = counts) else it }
+        disk.savePrefs(prefs())
+    }
 
     fun changeLimitAlerts(on: Boolean) {
         limitAlerts = on
@@ -229,6 +249,7 @@ class LedgerStore(
         alertDay = 0
         alertsSent = emptySet()
         lentReminderMonth = null
+        categories = DefaultCategories
         onboarded = false
     }
 
@@ -526,9 +547,9 @@ class LedgerStore(
     val mineAccounts: List<Account> get() = accounts.filter { it.mine }.map { it.account }
 
     /** First run / "Turn on" (§3): classify every sender and list accounts. Bodies stay in memory. */
-    fun startDiscovery(inbox: List<RawSms>) {
+    fun startDiscovery(inbox: List<RawSms>, result: DiscoveryResult = SmsDiscovery.discover(inbox)) {
         discoveryInbox = inbox
-        discovery = SmsDiscovery.discover(inbox)
+        discovery = result
     }
 
     fun cancelDiscovery() {
@@ -541,7 +562,34 @@ class LedgerStore(
      * every past message from confirmed senders. Returns how many transactions were added.
      */
     fun confirmAccounts(answers: Map<Account, Boolean>, newestMillis: Long): Int {
-        val found = discovery ?: return 0
+        if (!saveAnswers(answers)) return 0
+        val added = ingest(discoveryInbox)
+        finishImport(newestMillis)
+        return added
+    }
+
+    /**
+     * [confirmAccounts] for the screen: the same import in small pieces, pausing between them so the
+     * app keeps drawing and Android never sees it as frozen. [onProgress] gets 0..1. If it is
+     * cancelled part-way, running it again carries on: every message is read once.
+     */
+    suspend fun confirmAccountsInSteps(answers: Map<Account, Boolean>, newestMillis: Long, onProgress: (Float) -> Unit = {}): Int {
+        if (!saveAnswers(answers)) return 0
+        val inbox = discoveryInbox.sortedBy { it.at }
+        var added = 0
+        var read = 0
+        inbox.chunked(IMPORT_CHUNK).forEach { chunk ->
+            added += ingest(chunk)
+            read += chunk.size
+            onProgress(read.toFloat() / inbox.size)
+            kotlinx.coroutines.yield()
+        }
+        finishImport(newestMillis)
+        return added
+    }
+
+    private fun saveAnswers(answers: Map<Account, Boolean>): Boolean {
+        val found = discovery ?: return false
         write {
             senders.putAll(found.senders)
             found.accounts.forEach { f ->
@@ -550,12 +598,14 @@ class LedgerStore(
                 accounts += AccountState(f.account, mine)
             }
         }
-        val added = ingest(discoveryInbox)
+        return true
+    }
+
+    private fun finishImport(newestMillis: Long) {
         automatic = true
         lastScanMillis = maxOf(lastScanMillis, newestMillis)
         disk.savePrefs(prefs())
         cancelDiscovery()
-        return added
     }
 
     /** Manual mode keeps everything except capture (§2). Turning on again goes through discovery. */
@@ -625,8 +675,20 @@ class LedgerStore(
         var added = 0
         write {
             val batch = ArrayList<Tx>()
+            // Messages are read oldest first, so batch rows are in time order: rows that fell out of
+            // the look-back window stay out, and each message only looks at its own last day.
+            var windowStart = 0
+            val window = Duration.ofHours(maxOf(SmsDefaults.DUPLICATE_WINDOW_HOURS, SmsDefaults.MANUAL_MERGE_HOURS))
+            // Saved rows near these messages in time; the rest of the ledger is never scanned per message.
+            val from = fresh.first().at.minus(window)
+            val to = fresh.last().at.plus(window)
+            val nearby = transactions.indices.filter { transactions[it].at in from..to }
             fresh.forEach { sms ->
-                val outcome = SmsIngest.process(sms, context(sms, batch))
+                while (windowStart < batch.size && Duration.between(batch[windowStart].at, sms.at) > window) windowStart++
+                // One message the readers choke on must not stop the import. It is left unmarked,
+                // so a later version of the app reads it again.
+                val outcome = runCatching { SmsIngest.process(sms, context(sms, nearby, batch.subList(windowStart, batch.size))) }.getOrNull()
+                    ?: return@forEach
                 if (outcome !is Outcome.NewAccount) done += sms.key
                 if (apply(sms, outcome, batch)) added++
             }
@@ -643,12 +705,14 @@ class LedgerStore(
 
     private fun Tx.direction(): Direction = if (kind == TxKind.Income) Direction.Credit else Direction.Debit
 
-    private fun context(sms: RawSms, batch: List<Tx>): IngestContext {
-        val near = (transactions.asSequence() + batch.asSequence()).filter { !it.excluded && it.kind != TxKind.Transfer }
+    private fun context(sms: RawSms, nearby: List<Int>, batch: List<Tx>): IngestContext {
+        // [nearby] holds positions in the saved list, which is not reordered during an import. Rows are looked up live, so a row changed earlier in this import (merged, paired) is seen as it is now.
+        val rows = nearby.asSequence().map { transactions[it] } + batch.asSequence()
+        val near = rows.filter { !it.excluded && it.kind != TxKind.Transfer }
         fun minutes(tx: Tx) = Duration.between(tx.at, sms.at).abs().toMinutes()
         // A day of SMS-backed rows: the matchers apply their own, shorter windows. Rows already linked
         // as a self-transfer stay in, so a repeat alert for one is still recognised (logic.md §11.2).
-        val recent = (transactions.asSequence() + batch.asSequence())
+        val recent = rows
             .filter { !it.excluded && it.accountKey != null && minutes(it) <= SmsDefaults.DUPLICATE_WINDOW_HOURS * 60 }
             .map { Candidate(it.id, it.amountPaise, it.direction(), it.at, it.accountKey!!, it.upiRef, linked = it.kind == TxKind.Transfer) }
             .toList()
@@ -756,8 +820,9 @@ class LedgerStore(
         val untagged = transactions.filter { it.kind == TxKind.Spend && it.categoryId == null && !it.excluded }
             .groupBy { CategoryRules.payeeKey(it.payee) }.filter { it.value.size >= BULK_MIN }
         untagged.forEach { (key, rows) ->
-            if (needs.any { it is NeedsItem.Bulk && CategoryRules.payeeKey(it.payee) == key }) return@forEach
+            // The one card covers every payment to this payee, including ones that arrive after it was raised.
             needs.removeAll { it is NeedsItem.NewPayee && CategoryRules.payeeKey(it.payee) == key }
+            if (needs.any { it is NeedsItem.Bulk && CategoryRules.payeeKey(it.payee) == key }) return@forEach
             needs += NeedsItem.Bulk(nextNeedId++, rows.first().payee, rows.first().sms ?: rows.first().payee)
         }
     }

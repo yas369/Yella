@@ -77,8 +77,6 @@ fun TodayScreen(
         item(key = "statusBar") { Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars)) }
         item(key = "hero") {
             Column(Modifier.padding(start = Space.Gutter, end = Space.Gutter, top = Space.XL, bottom = Space.XL)) {
-                Text(today.format(DateTimeFormatter.ofPattern("EEEE, d MMM")), style = MaterialTheme.typography.bodyMedium, color = c.textSecondary)
-                Spacer(Modifier.height(Space.S))
                 LimitHero(state.status, state.spentPaise, state.limitPaise)
             }
         }

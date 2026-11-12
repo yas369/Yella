@@ -204,4 +204,19 @@ class LedgerStoreTest {
         assertTrue(reopened.transactions.isEmpty())
         assertEquals(DEFAULT_LIMIT_PAISE, reopened.limitPaise)
     }
+
+    @Test
+    fun `whether a category counts toward the daily limit is the user's choice and is remembered`() {
+        val s = store()
+        s.spend(30_000, "Landlord", "rent")
+        s.spend(5_000, "Cafe", "food")
+        assertEquals(5_000L, s.spentTodayPaise)
+        s.setCountsDaily("rent", true)
+        s.setCountsDaily("food", false)
+        assertEquals(30_000L, s.spentTodayPaise)
+        val reopened = store()
+        assertEquals(30_000L, reopened.spentTodayPaise)
+        assertTrue(reopened.category("rent")!!.countsDaily)
+        assertFalse(reopened.category("food")!!.countsDaily)
+    }
 }

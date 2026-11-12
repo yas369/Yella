@@ -43,6 +43,8 @@ data class SettingsState(
     val lentReminder: Boolean = true,
     /** False when Android notifications are off for the app (design.md §9: a row here, never on Home). */
     val notificationsAllowed: Boolean = true,
+    /** A report from the last unexpected close is waiting to be copied. */
+    val hasCrashReport: Boolean = false,
 )
 
 /** Settings (§7): plain rows separated by dividers, grouped under section titles. No icons. */
@@ -61,6 +63,9 @@ fun SettingsScreen(
     onOpenTemplates: () -> Unit = {},
     onLimitAlerts: (Boolean) -> Unit = {},
     onLentReminder: (Boolean) -> Unit = {},
+    onOpenCategories: () -> Unit = {},
+    onOpenPrivacy: () -> Unit = {},
+    onCopyCrash: () -> Unit = {},
 ) {
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     var confirmManual by rememberSaveable { mutableStateOf(false) }
@@ -72,6 +77,7 @@ fun SettingsScreen(
         item {
             Group("Spending") {
                 row { Setting("Daily limit", formatRupees(state.limitPaise), onClick = onEditLimit) }
+                row { Setting("Categories", "Which ones count toward the daily limit", onClick = onOpenCategories) }
                 row { Setting("Owed to you", "Money you've lent", onClick = onOpenOwed) }
             }
         }
@@ -135,6 +141,10 @@ fun SettingsScreen(
         item {
             Group("Your data") {
                 row { Setting("Stored on this phone only", "No account, no servers. The app has no internet access.", onClick = null) }
+                row { Setting("Privacy policy", "What the app reads, keeps and never sends", onClick = onOpenPrivacy) }
+                if (state.hasCrashReport) {
+                    row { Setting("Last crash report", "The app closed unexpectedly. Tap to copy the report.", onClick = onCopyCrash) }
+                }
                 row { Setting("Delete all data", "Erase every entry and setting and start over", danger = true) { confirmDelete = true } }
             }
         }

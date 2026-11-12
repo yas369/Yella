@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -29,6 +30,7 @@ import com.smsledger.core.money.formatRupees
 import com.smsledger.core.sms.Account
 import com.smsledger.core.sms.Direction
 import com.smsledger.core.sms.FoundAccount
+import com.smsledger.core.sms.SmsDiscovery
 import com.smsledger.data.LedgerStore
 import com.smsledger.sms.SmsAccess
 import com.smsledger.sms.SmsInbox
@@ -42,7 +44,7 @@ import com.smsledger.ui.theme.Space
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private enum class CaptureStep { Explain, Reading, Confirm }
+private enum class CaptureStep { Explain, Reading, Confirm, Importing }
 
 /**
  * Turning on automatic capture (design.md §7 First run 1–2): the disclosure Play requires before
@@ -55,6 +57,7 @@ fun CaptureSetupFlow(store: LedgerStore, onFinished: (automatic: Boolean) -> Uni
     var step by rememberSaveable { mutableStateOf(if (store.discovery != null) CaptureStep.Confirm else CaptureStep.Explain) }
     var newest by rememberSaveable { mutableLongStateOf(0L) }
     var declined by rememberSaveable { mutableStateOf(false) }
+    var pending by remember { mutableStateOf<Map<Account, Boolean>?>(null) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         if (result.values.all { it }) step = CaptureStep.Reading else declined = true
     }
@@ -67,12 +70,14 @@ fun CaptureSetupFlow(store: LedgerStore, onFinished: (automatic: Boolean) -> Uni
         )
         CaptureStep.Reading -> {
             LaunchedEffect(Unit) {
+                // Reading and sorting thousands of messages takes seconds on a phone: never on the main thread.
                 val read = withContext(Dispatchers.IO) { SmsInbox.read(context, 0) }
+                val result = withContext(Dispatchers.Default) { SmsDiscovery.discover(read.messages) }
                 newest = read.newestMillis
-                store.startDiscovery(read.messages)
+                store.startDiscovery(read.messages, result)
                 step = CaptureStep.Confirm
             }
-            ReadingStep()
+            ReadingStep("Reading your messages", "Finding your banks and wallets. Nothing leaves this phone.")
         }
         CaptureStep.Confirm -> {
             val found = store.discovery?.accounts.orEmpty()
@@ -81,14 +86,25 @@ fun CaptureSetupFlow(store: LedgerStore, onFinished: (automatic: Boolean) -> Uni
                 // Turning capture on again keeps earlier answers, so "Not mine" is never asked again (§4).
                 initial = { account -> store.accounts.firstOrNull { it.account == account }?.mine ?: true },
                 onDone = { answers ->
-                    store.confirmAccounts(answers, newest)
-                    onFinished(true)
+                    pending = answers
+                    step = CaptureStep.Importing
                 },
                 onManual = {
                     store.cancelDiscovery()
                     onFinished(false)
                 },
             )
+        }
+        CaptureStep.Importing -> {
+            val answers = pending
+            var progress by remember { mutableFloatStateOf(0f) }
+            LaunchedEffect(answers) {
+                // The answers are gone after the screen was rebuilt (rotation): ask again. Nothing is read twice.
+                if (answers == null) { step = CaptureStep.Confirm; return@LaunchedEffect }
+                store.confirmAccountsInSteps(answers, newest) { progress = it }
+                onFinished(true)
+            }
+            ReadingStep("Adding your transactions", "Reading past messages from your accounts. This can take a minute.", progress)
         }
     }
 }
@@ -129,17 +145,18 @@ private fun Promise(title: String, body: String) {
 }
 
 @Composable
-private fun ReadingStep() {
+private fun ReadingStep(title: String, body: String, progress: Float? = null) {
     OnboardingFrame(actions = {}) {
-        Text("Reading your messages", style = MaterialTheme.typography.titleLarge)
+        Text(title, style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(Space.S))
-        Text(
-            "Finding your banks and wallets. Nothing leaves this phone.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = LedgerTheme.colors.textSecondary,
-        )
+        Text(body, style = MaterialTheme.typography.bodyLarge, color = LedgerTheme.colors.textSecondary)
         Spacer(Modifier.height(Space.L))
-        LinearProgressIndicator(Modifier.fillMaxWidth(), color = LedgerTheme.colors.accent, trackColor = LedgerTheme.colors.divider)
+        val c = LedgerTheme.colors
+        if (progress == null) {
+            LinearProgressIndicator(Modifier.fillMaxWidth(), color = c.accent, trackColor = c.divider)
+        } else {
+            LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(), color = c.accent, trackColor = c.divider)
+        }
     }
 }
 
