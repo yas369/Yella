@@ -19,9 +19,10 @@ object SmsDefaults {
     const val TEMPLATE_OVERLAP = 0.8
     /**
      * An account or wallet is put to the user ("is this yours?") only once this many transaction
-     * messages name it. One-off numbers in a message (the other party's account, a reference) never reach it.
+     * messages name it as the user's own (logic.md §8.3.1). The other party's account in a message
+     * is never counted at all (§8.6), so the bar only has to keep out one-off misreads.
      */
-    const val ACCOUNT_MIN_MESSAGES = 10
+    const val ACCOUNT_MIN_MESSAGES = 3
     const val FEE_CAP_PAISE = 5_000L
     const val FEE_PERCENT = 2L
 

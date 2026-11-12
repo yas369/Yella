@@ -67,6 +67,10 @@ data class Prefs(
     val notDaily: String? = null,
     /** "accountKey<tab>messageKey" for accounts not yet asked about: how often each has been seen. No message text. */
     val sightings: Set<String> = emptySet(),
+    /** "aliasKey<tab>accountKey": spellings the user said are the same account. */
+    val aliases: Set<String> = emptySet(),
+    /** Pairs of account keys the user said are different accounts. */
+    val differentPairs: Set<String> = emptySet(),
 )
 
 /** Pre-filled in the first-run limit field; the user confirms or changes it. */
@@ -134,6 +138,8 @@ class RoomLedgerDisk(context: Context) : LedgerDisk {
             lentReminderMonth = prefs.getString(KEY_LENT_MONTH, "").orEmpty(),
             notDaily = prefs.getString(KEY_NOT_DAILY, null),
             sightings = prefs.getStringSet(KEY_SIGHTINGS, null)?.toSet().orEmpty(),
+            aliases = prefs.getStringSet(KEY_ALIASES, null)?.toSet().orEmpty(),
+            differentPairs = prefs.getStringSet(KEY_DIFFERENT, null)?.toSet().orEmpty(),
         )
         return data to settings
     }
@@ -190,6 +196,8 @@ class RoomLedgerDisk(context: Context) : LedgerDisk {
             .putString(KEY_LENT_MONTH, prefs.lentReminderMonth)
             .putString(KEY_NOT_DAILY, prefs.notDaily)
             .putStringSet(KEY_SIGHTINGS, prefs.sightings)
+            .putStringSet(KEY_ALIASES, prefs.aliases)
+            .putStringSet(KEY_DIFFERENT, prefs.differentPairs)
             .apply()
     }
 
@@ -264,6 +272,8 @@ class RoomLedgerDisk(context: Context) : LedgerDisk {
         const val KEY_LENT_MONTH = "lent_reminder_month"
         const val KEY_NOT_DAILY = "not_daily_categories"
         const val KEY_SIGHTINGS = "account_sightings"
+        const val KEY_ALIASES = "account_aliases"
+        const val KEY_DIFFERENT = "account_different_pairs"
         const val KEY_AUTOMATIC = "automatic"
         const val KEY_LAST_SCAN = "last_scan_millis"
         const val KEY_ONBOARDED = "onboarded"

@@ -81,14 +81,28 @@ object Patterns {
     fun compatible(a: String, b: String): Boolean = a.endsWith(b) || b.endsWith(a)
 
     /** Every account digit run in the message, cleaned, in order of appearance. Runs inside a date are not accounts (§6.3). */
-    fun allMaskedDigits(body: String): List<String> {
+    fun allMaskedDigits(body: String): List<String> = accountRuns(body).map { it.digits }
+
+    private val CARD_WORD = Regex("""(?i)\bcard\b""")
+    private const val CARD_LOOK_BACK = 24
+
+    /**
+     * Every account digit run in the message with where it sits and whether the words around it
+     * call it a card. Cleaned, in order of appearance, each number once. Runs inside a date are not accounts (§6.3).
+     */
+    fun accountRuns(body: String): List<AccountRun> {
         val dates = DATE.findAll(body).map { it.range }.toList()
         return listOf(ACCOUNT, MASK, ENDING)
-            .flatMap { regex -> regex.findAll(body).map { it.groups[1]!! } }
-            .filter { run -> dates.none { run.range.first <= it.last && it.first <= run.range.last } }
-            .sortedBy { it.range.first }
-            .mapNotNull { cleanDigits(it.value) }
-            .distinct()
+            .flatMap { regex ->
+                regex.findAll(body).map { m ->
+                    val card = CARD_WORD.containsMatchIn(body.substring(maxOf(0, m.range.first - CARD_LOOK_BACK), m.range.last + 1))
+                    m.groups[1]!! to card
+                }
+            }
+            .filter { (run, _) -> dates.none { run.range.first <= it.last && it.first <= run.range.last } }
+            .sortedBy { it.first.range.first }
+            .mapNotNull { (run, card) -> cleanDigits(run.value)?.let { AccountRun(it, run.range, if (card) AccountKind.Card else AccountKind.Bank) } }
+            .distinctBy { it.digits }
     }
 
     /** The first account digit run (§6.3), cleaned, or null. */

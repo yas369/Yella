@@ -19,7 +19,15 @@ data class IngestContext(
     val recent: List<Candidate> = emptyList(),
     /** Manual entries not yet merged with a bank SMS. */
     val manual: List<Candidate> = emptyList(),
-)
+    /**
+     * Other spellings of an account the user confirmed as the same one (§8.4) → the account that
+     * stands for them. [mine] and [notMine] list the spellings too, so a message matches either way.
+     */
+    val aliases: Map<Account, Account> = emptyMap(),
+) {
+    /** The account that stands for [account] after the user's "Same account" answers. */
+    fun canonical(account: Account): Account = aliases[account] ?: account
+}
 
 /** What to do with one SMS. The app applies it; nothing here touches storage. */
 sealed interface Outcome {
@@ -120,14 +128,18 @@ object SmsIngest {
         val parsed: ParseResult.Parsed? = learned?.second ?: TransactionParser.parse(sms.body) as? ParseResult.Parsed
 
         // The account gate (§8.0): a message that names no account of the user's creates nothing.
-        val runs = Patterns.allMaskedDigits(sms.body)
-        if (runs.isEmpty()) {
+        if (Patterns.accountRuns(sms.body).isEmpty()) {
             if (parsed == null || ctx.mine.isEmpty()) return Outcome.Skip(SkipReason.NoAccount)
-            val atBank = ctx.mine.filter { it.brand == brand }
+            val atBank = ctx.mine.filter { it.brand == brand }.map(ctx::canonical).distinct()
             val structured = parsed.upiRef != null || Patterns.hasBalance(sms.body)
-            return if (atBank.size == 1 && structured) add(sms, atBank.single(), parsed, ctx) else ask(brand, null, atBank.ifEmpty { ctx.mine }, parsed)
+            return if (atBank.size == 1 && structured) add(sms, atBank.single(), parsed, ctx)
+            else ask(brand, null, atBank.ifEmpty { ctx.mine.map(ctx::canonical).distinct() }, parsed)
         }
-        // A message can name two accounts, the user's and the other party's: the user's own decides.
+        // §8.6: only the account the wording marks as the user's own counts. A message that names
+        // nothing but the other party's account says nothing about the user's money.
+        val runs = AccountRoles.own(sms.body, parsed?.direction).map { it.digits }
+        if (runs.isEmpty()) return Outcome.Skip(SkipReason.NoAccount)
+        // Of the user's own numbers in the message, one already confirmed decides.
         val known = ctx.mine + ctx.notMine
         val matches = runs.map { it to AccountMatcher.match(brand, it, known) }
         val (digits, match) = matches.firstOrNull { (_, m) -> m is AccountMatch.Matched && m.account in ctx.mine }
@@ -135,15 +147,24 @@ object SmsIngest {
             ?: matches.firstOrNull { (_, m) -> m !is AccountMatch.Unknown }
             ?: matches.first()
         return when (match) {
-            is AccountMatch.Matched -> when {
-                match.account in ctx.notMine -> Outcome.Ignore
-                parsed == null -> Outcome.Unreadable(match.account)
-                else -> add(sms, match.account, parsed, ctx)
+            is AccountMatch.Matched -> {
+                val account = ctx.canonical(match.account)
+                when {
+                    match.account in ctx.notMine -> Outcome.Ignore
+                    parsed == null -> Outcome.Unreadable(account)
+                    else -> add(sms, account, parsed, ctx)
+                }
             }
-            is AccountMatch.Ambiguous -> when {
-                match.candidates.none { it in ctx.mine } -> Outcome.Ignore
-                parsed == null -> Outcome.Unreadable(null)
-                else -> ask(brand, digits, match.candidates, parsed)
+            is AccountMatch.Ambiguous -> {
+                // Several spellings of one confirmed account are not a real choice.
+                val candidates = match.candidates.filter { it in ctx.mine }.map(ctx::canonical).distinct()
+                when {
+                    candidates.isEmpty() -> Outcome.Ignore
+                    candidates.size == 1 && match.candidates.all { it in ctx.mine } ->
+                        if (parsed == null) Outcome.Unreadable(candidates.single()) else add(sms, candidates.single(), parsed, ctx)
+                    parsed == null -> Outcome.Unreadable(null)
+                    else -> ask(brand, digits, match.candidates.map(ctx::canonical).distinct(), parsed)
+                }
             }
             AccountMatch.Unknown -> if (parsed == null) Outcome.Skip(SkipReason.NoAccount) else Outcome.NewAccount(Account(brand, digits))
         }
@@ -209,8 +230,9 @@ data class FoundAccount(
     val lastAmountPaise: Long?,
     val lastDirection: Direction?,
     val lastAt: LocalDateTime,
-    /** How many transaction messages name this account. */
+    /** How many transaction messages name this account as the user's own. */
     val messages: Int = 0,
+    val kind: AccountKind = AccountKind.Bank,
 )
 
 data class DiscoveryResult(val senders: Map<String, SenderKind>, val accounts: List<FoundAccount>)
@@ -230,18 +252,23 @@ object SmsDiscovery {
         val found = byBrand.flatMap { (brand, list) ->
             when (senders[brand]) {
                 SenderKind.Bank -> {
-                    // Each message is read once: the digit runs of every transaction-shaped message.
-                    val shaped = list.filter { TransactionParser.parse(it.body) is ParseResult.Parsed }.map { it to Patterns.allMaskedDigits(it.body) }
-                    val seen = shaped.flatMap { it.second }.distinct()
-                    // "821" and "4821" are one account written two ways: only the longer is listed.
-                    seen.filter { digits -> seen.none { it.length > digits.length && it.endsWith(digits) } }.map { digits ->
-                        val naming = shaped.filter { (_, runs) -> runs.any { digits.endsWith(it) } }
-                        evidence(Account(brand, digits), naming.last().first, naming.size)
+                    // Each message is read once: the user's own account numbers in every
+                    // transaction-shaped message (§8.6). The other party's numbers are never collected.
+                    val shaped = list.mapNotNull { sms ->
+                        val parsed = TransactionParser.parse(sms.body) as? ParseResult.Parsed ?: return@mapNotNull null
+                        sms to AccountRoles.own(sms.body, parsed.direction)
+                    }
+                    // Each spelling is listed as found. "821" and "4821" may be one account, but that
+                    // is the user's call ("Same account?", §8.4), never a silent merge.
+                    shaped.flatMap { it.second }.map { it.digits }.distinct().map { digits ->
+                        val naming = shaped.mapNotNull { (sms, runs) -> runs.firstOrNull { it.digits == digits }?.let { sms to it } }
+                        val card = naming.count { it.second.kind == AccountKind.Card } * 2 > naming.size
+                        evidence(Account(brand, digits), naming.last().first, naming.size, if (card) AccountKind.Card else AccountKind.Bank)
                     }
                 }
                 SenderKind.Wallet -> {
                     val shaped = list.filter { WalletRules.classify(it.body) != WalletKind.Unknown && Patterns.transactionAmount(it.body) != null }
-                    listOf(evidence(Account(brand, Account.WALLET), shaped.lastOrNull() ?: list.last(), shaped.size))
+                    listOf(evidence(Account(brand, Account.WALLET), shaped.lastOrNull() ?: list.last(), shaped.size, AccountKind.Wallet))
                 }
                 else -> emptyList()
             }
@@ -252,8 +279,8 @@ object SmsDiscovery {
         return DiscoveryResult(senders, frequent.ifEmpty { found })
     }
 
-    private fun evidence(account: Account, sms: RawSms, messages: Int): FoundAccount {
+    private fun evidence(account: Account, sms: RawSms, messages: Int, kind: AccountKind): FoundAccount {
         val parsed = TransactionParser.parse(sms.body) as? ParseResult.Parsed
-        return FoundAccount(account, parsed?.amountPaise ?: Patterns.transactionAmount(sms.body), parsed?.direction, sms.at, messages)
+        return FoundAccount(account, parsed?.amountPaise ?: Patterns.transactionAmount(sms.body), parsed?.direction, sms.at, messages, kind)
     }
 }

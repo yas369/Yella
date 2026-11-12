@@ -60,7 +60,7 @@ class BigInboxTest {
     }
 
     @Test
-    fun `only accounts named in ten or more messages are put to the user`() {
+    fun `only the user's own repeated accounts are put to the user`() {
         val strays = listOf(
             RawSms("s1", "AD-HDFCBK-S", "Rs.500.00 debited from a/c XX4821 and credited to a/c XX7777. UPI Ref 611111111111", now.minusDays(3)),
             RawSms("s2", "AD-HDFCBK-S", "Rs.900.00 credited to a/c XX8888 of your beneficiary. Ref 622222222222", now.minusDays(2)),
@@ -70,7 +70,7 @@ class BigInboxTest {
         s.startDiscovery(inbox(400) + strays)
         val listed = s.discovery!!.accounts
         assertEquals(setOf("HDFCBK|4821", "CUBANK|1234", "ICICIB|9005", "AMAZONPAY|WALLET"), listed.map { it.account.key }.toSet())
-        assertTrue(listed.all { it.messages >= 10 })
+        assertTrue(listed.all { it.messages >= com.smsledger.core.sms.SmsDefaults.ACCOUNT_MIN_MESSAGES })
         // The one-off numbers raise no question after the import either.
         s.confirmAccounts(listed.associate { it.account to true }, 1)
         assertTrue(s.needs.none { it is com.smsledger.ui.model.NeedsItem.NewAccount })

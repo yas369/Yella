@@ -2,6 +2,7 @@ package com.smsledger.data
 
 import com.smsledger.core.sms.Account
 import com.smsledger.core.sms.RawSms
+import com.smsledger.core.sms.SmsDefaults
 import com.smsledger.ui.model.NeedsItem
 import com.smsledger.ui.model.TxKind
 import kotlinx.coroutines.runBlocking
@@ -129,29 +130,110 @@ class SmsCaptureTest {
     }
 
     @Test
-    fun `a new account is asked about only after ten messages name it, then all of them are read`() {
+    fun `a new account is asked about only after enough messages name it, then all of them are read`() {
         val s = store().setUp()
-        val messages = (1..10).map { i -> sms("HDFCBK", "Rs ${100 + i} debited from a/c XX5555 at SHOP $i", now.minusMinutes(60L - i)) }
-        s.ingestScan(messages.take(9), newestMillis = 8)
+        val n = SmsDefaults.ACCOUNT_MIN_MESSAGES
+        val messages = (1..n).map { i -> sms("HDFCBK", "Rs ${100 + i} debited from a/c XX5555 at SHOP $i", now.minusMinutes(60L - i)) }
+        s.ingestScan(messages.take(n - 1), newestMillis = 8)
         assertTrue(s.needs.none { it is NeedsItem.NewAccount })
-        // Reading the same nine again (the catch-up overlap) does not count them twice.
-        s.ingestScan(messages.take(9), newestMillis = 8)
+        // Reading the same ones again (the catch-up overlap) does not count them twice.
+        s.ingestScan(messages.take(n - 1), newestMillis = 8)
         assertTrue(s.needs.none { it is NeedsItem.NewAccount })
         s.ingestScan(messages, newestMillis = 9)
         val ask = s.needs.filterIsInstance<NeedsItem.NewAccount>().single()
         s.answerNewAccount(ask, mine = true)
         assertNotNull(s.rescanFromMillis)
         s.ingestScan(messages, newestMillis = 10) // the rescan the app runs next
-        assertEquals(10, s.transactions.count { it.accountKey == "HDFCBK|5555" })
+        assertEquals(n, s.transactions.count { it.accountKey == "HDFCBK|5555" })
     }
 
     @Test
     fun `how often an unknown account was seen survives a restart`() {
-        val messages = (1..10).map { i -> sms("HDFCBK", "Rs ${100 + i} debited from a/c XX5555 at SHOP $i", now.minusMinutes(60L - i)) }
-        store().setUp().ingestScan(messages.take(9), newestMillis = 8)
+        val n = SmsDefaults.ACCOUNT_MIN_MESSAGES
+        val messages = (1..n).map { i -> sms("HDFCBK", "Rs ${100 + i} debited from a/c XX5555 at SHOP $i", now.minusMinutes(60L - i)) }
+        store().setUp().ingestScan(messages.take(n - 1), newestMillis = 8)
         val reopened = store()
-        reopened.ingestScan(messages.drop(9), newestMillis = 9)
+        reopened.ingestScan(messages.drop(n - 1), newestMillis = 9)
         assertEquals(1, reopened.needs.count { it is NeedsItem.NewAccount })
+    }
+
+    @Test
+    fun `the other party's account is never listed or asked about, however often it appears`() {
+        val transfers = (1..8).map { i ->
+            sms("AD-HDFCBK-S", "Rs.${200 + i}.00 debited from a/c XX4821 and credited to a/c XX7777. UPI Ref 6111111111${10 + i}", now.minusHours(10L + i))
+        }
+        val s = store()
+        s.startDiscovery(inbox + transfers)
+        assertTrue(s.discovery!!.accounts.none { it.account.digits == "7777" })
+        s.confirmAccounts(s.discovery!!.accounts.associate { it.account to true }, newestMillis = 1)
+        assertEquals(8, s.transactions.count { it.accountKey == "HDFCBK|4821" && it.upiRef?.startsWith("6111111111") == true })
+        assertTrue(s.needs.none { it is NeedsItem.NewAccount })
+        assertTrue(s.transactions.none { it.accountKey == "HDFCBK|7777" })
+    }
+
+    @Test
+    fun `a message about someone else's account only is skipped`() {
+        val s = store().setUp()
+        val count = s.transactions.size
+        s.ingestScan(listOf(sms("HDFCBK", "Rs.900.00 credited to a/c XX8888 of your beneficiary. Ref 622222222222")), newestMillis = 20)
+        assertEquals(count, s.transactions.size)
+        assertTrue(s.needs.none { it is NeedsItem.NewAccount || it is NeedsItem.WhichAccount })
+    }
+
+    /** One account written two ways by one bank, and seen under a second sender name. */
+    private val twoSpellings = (1..4).flatMap { i ->
+        listOf(
+            sms("AD-HDFCBK-S", "Rs.${300 + i}.00 debited from a/c XX4821 to VPA shop$i@okaxis. UPI Ref 6333333333${10 + i}", now.minusHours(20L + i)),
+            sms("VM-HDFCBN", "INR ${400 + i}.00 debited from A/c XX4821 at STORE $i. Ref 6444444444${10 + i}", now.minusHours(30L + i)),
+        )
+    }
+
+    @Test
+    fun `accounts whose last digits match are asked about, and Same makes them one`() {
+        val s = store()
+        s.startDiscovery(twoSpellings)
+        val pair = s.discoveryPairs.single()
+        assertEquals(setOf("HDFCBK|4821", "HDFCBN|4821"), setOf(pair.a.key, pair.b.key))
+        assertEquals(null, s.pairAnswer(pair))
+
+        val merged = com.smsledger.core.sms.AccountGroups.merge(s.discovery!!.accounts, listOf(pair)).accounts
+        val account = merged.single().account
+        s.confirmAccounts(mapOf(account to true), newestMillis = 1, same = mapOf(pair to true))
+        assertEquals(listOf(account), s.accounts.map { it.account })
+        assertEquals(8, s.transactions.count { it.accountKey == account.key })
+
+        // A later message from either sender name lands on the one account, with no question.
+        val other = if (account.brand == "HDFCBK") "VM-HDFCBN" else "AD-HDFCBK-S"
+        s.ingestScan(listOf(sms(other, "Rs 77 debited from a/c XX4821 at KIOSK", now.minusMinutes(5))), newestMillis = 30)
+        assertEquals(9, s.transactions.count { it.accountKey == account.key })
+        assertTrue(s.needs.none { it is NeedsItem.NewAccount || it is NeedsItem.WhichAccount })
+
+        // The answer is remembered across a restart.
+        val reopened = store()
+        reopened.startDiscovery(twoSpellings)
+        assertEquals(true, reopened.pairAnswer(reopened.discoveryPairs.single()))
+    }
+
+    @Test
+    fun `Different keeps two accounts apart and is remembered`() {
+        val s = store()
+        s.startDiscovery(twoSpellings)
+        val pair = s.discoveryPairs.single()
+        s.confirmAccounts(mapOf(pair.a to true, pair.b to false), newestMillis = 1, same = mapOf(pair to false))
+        assertEquals(2, s.accounts.size)
+        assertEquals(4, s.transactions.count { it.accountKey == pair.a.key })
+        assertEquals(0, s.transactions.count { it.accountKey == pair.b.key })
+        assertEquals(false, s.pairAnswer(pair))
+    }
+
+    @Test
+    fun `an account the user did not answer is not counted as theirs`() {
+        val s = store()
+        s.startDiscovery(inbox)
+        val first = s.discovery!!.accounts.first().account
+        s.confirmAccounts(mapOf(first to true), newestMillis = 1)
+        assertEquals(listOf(first), s.accounts.map { it.account })
+        assertTrue(s.transactions.all { it.accountKey == first.key })
     }
 
     @Test

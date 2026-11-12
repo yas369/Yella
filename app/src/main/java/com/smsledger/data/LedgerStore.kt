@@ -19,6 +19,8 @@ import com.smsledger.core.limit.limitStatus
 import com.smsledger.core.money.formatRupees
 import com.smsledger.core.money.formatRupeesWhole
 import com.smsledger.core.sms.Account
+import com.smsledger.core.sms.AccountGroups
+import com.smsledger.core.sms.AccountPair
 import com.smsledger.core.sms.BankNames
 import com.smsledger.core.sms.Candidate
 import com.smsledger.core.sms.Confidence
@@ -121,6 +123,10 @@ class LedgerStore(
     private var sightingsChanged = false
     /** Accounts just switched to Mine: their already-skipped messages are read again on the next full scan. */
     private val rereadAccounts = HashSet<Account>()
+    /** Other spellings of an account the user said are the same one → the account that stands for them (logic.md §8.4). */
+    private val aliases = HashMap<Account, Account>()
+    /** Pairs the user said are different accounts, so they are never asked again. */
+    private val differentPairs = HashSet<String>()
     private var nextNeedId = 1L
 
     /** Accounts found by discovery, waiting for Mine / Not mine. In memory only. */
@@ -162,6 +168,14 @@ class LedgerStore(
         alertDay = prefs.alertDay
         alertsSent = prefs.alertsSent.split(',').mapNotNull { name -> LimitAlert.entries.firstOrNull { it.name == name } }.toSet()
         categories = categoriesWith(prefs.notDaily)
+        aliases.clear()
+        prefs.aliases.forEach { entry ->
+            val parts = entry.split('\t')
+            val alias = parts.getOrNull(0)?.let(Account::fromKey)
+            val lead = parts.getOrNull(1)?.let(Account::fromKey)
+            if (alias != null && lead != null) aliases[alias] = lead
+        }
+        differentPairs.clear(); differentPairs += prefs.differentPairs
         sightings.clear()
         prefs.sightings.forEach { entry ->
             val parts = entry.split('\t')
@@ -180,6 +194,8 @@ class LedgerStore(
         limitAlerts, lentReminder, alertDay, alertsSent.joinToString(",") { it.name }, lentReminderMonth?.toString().orEmpty(),
         notDaily = categories.filterNot { it.countsDaily }.joinToString(",") { it.id },
         sightings = sightings.flatMapTo(HashSet()) { (account, keys) -> keys.map { "$account\t$it" } },
+        aliases = aliases.mapTo(HashSet()) { (alias, lead) -> "${alias.key}\t${lead.key}" },
+        differentPairs = differentPairs.toSet(),
     )
 
     /** null = never changed: the product defaults (bills, rent and EMI don't count). */
@@ -262,6 +278,8 @@ class LedgerStore(
         lentReminderMonth = null
         categories = DefaultCategories
         sightings.clear()
+        aliases.clear()
+        differentPairs.clear()
         rereadAccounts.clear()
         rescanFromMillis = null
         onboarded = false
@@ -575,8 +593,8 @@ class LedgerStore(
      * "Done" on account confirmation (§4): saves the answers, turns automatic mode on and reads
      * every past message from confirmed senders. Returns how many transactions were added.
      */
-    fun confirmAccounts(answers: Map<Account, Boolean>, newestMillis: Long): Int {
-        if (!saveAnswers(answers)) return 0
+    fun confirmAccounts(answers: Map<Account, Boolean>, newestMillis: Long, same: Map<AccountPair, Boolean> = emptyMap()): Int {
+        if (!saveAnswers(answers, same)) return 0
         val added = ingest(discoveryInbox)
         finishImport(newestMillis)
         return added
@@ -587,8 +605,13 @@ class LedgerStore(
      * app keeps drawing and Android never sees it as frozen. [onProgress] gets 0..1. If it is
      * cancelled part-way, running it again carries on: every message is read once.
      */
-    suspend fun confirmAccountsInSteps(answers: Map<Account, Boolean>, newestMillis: Long, onProgress: (Float) -> Unit = {}): Int {
-        if (!saveAnswers(answers)) return 0
+    suspend fun confirmAccountsInSteps(
+        answers: Map<Account, Boolean>,
+        newestMillis: Long,
+        same: Map<AccountPair, Boolean> = emptyMap(),
+        onProgress: (Float) -> Unit = {},
+    ): Int {
+        if (!saveAnswers(answers, same)) return 0
         val inbox = discoveryInbox.sortedBy { it.at }
         var added = 0
         var read = 0
@@ -602,16 +625,48 @@ class LedgerStore(
         return added
     }
 
-    private fun saveAnswers(answers: Map<Account, Boolean>): Boolean {
+    /**
+     * "Same account?" pairs among the discovered accounts (logic.md §8.4): every two whose last
+     * digits match. All are shown; [pairAnswer] gives what the user said before, if anything.
+     */
+    val discoveryPairs: List<AccountPair>
+        get() = discovery?.let { AccountGroups.pairs(it.accounts.map { found -> found.account }) }.orEmpty()
+
+    /** true = same, false = different, null = never asked. */
+    fun pairAnswer(pair: AccountPair): Boolean? = when {
+        pair.key in differentPairs -> false
+        (aliases[pair.a] ?: pair.a) == (aliases[pair.b] ?: pair.b) -> true
+        else -> null
+    }
+
+    /**
+     * Saves the user's answers: which discovered accounts are one account ([same]), and which of the
+     * resulting accounts are theirs ([answers], keyed by the account that stands for each group).
+     * An account with no answer is left out, so nothing is counted as the user's by default.
+     */
+    private fun saveAnswers(answers: Map<Account, Boolean>, same: Map<AccountPair, Boolean>): Boolean {
         val found = discovery ?: return false
+        val merged = AccountGroups.merge(found.accounts, same.filterValues { it }.keys)
         write {
             senders.putAll(found.senders)
-            found.accounts.forEach { f ->
-                val mine = answers[f.account] ?: true
+            merged.aliases.forEach { (alias, lead) ->
+                aliases[alias] = lead
+                accounts.removeAll { it.account == alias }
+            }
+            // A spelling that used to stand for others now points at the new lead too.
+            aliases.entries.toList().forEach { (alias, lead) -> merged.aliases[lead]?.let { aliases[alias] = it } }
+            same.filterValues { !it }.keys.forEach { pair ->
+                differentPairs += pair.key
+                // Taking back an earlier "same": each spelling stands for itself again.
+                aliases.entries.removeAll { (alias, lead) -> pair.has(alias) && pair.has(lead) }
+            }
+            merged.accounts.forEach { f ->
+                val mine = answers[f.account] ?: return@forEach
                 accounts.removeAll { it.account == f.account }
                 accounts += AccountState(f.account, mine)
             }
         }
+        disk.savePrefs(prefs())
         return true
     }
 
@@ -649,6 +704,7 @@ class LedgerStore(
         if (index >= 0) accounts[index] = AccountState(account, mine) else accounts += AccountState(account, mine)
         if (mine) {
             rereadAccounts += account
+            rereadAccounts += aliases.filterValues { it == account }.keys
             rescanFromMillis = Long.MIN_VALUE
             return@write "${account.label} is yours · its messages are being read"
         }
@@ -782,12 +838,20 @@ class LedgerStore(
             .map { Candidate(it.id, it.amountPaise, it.direction(), it.at, MANUAL) }.toList()
         return IngestContext(
             senders = senders,
-            mine = mineAccounts,
-            notMine = accounts.filterNot { it.mine }.map { it.account },
+            mine = withSpellings(mineAccounts),
+            notMine = withSpellings(accounts.filterNot { it.mine }.map { it.account }),
+            aliases = aliases,
             templates = templates.mapValues { it.value.template },
             recent = recent,
             manual = manual,
         )
+    }
+
+    /** [list] plus every other spelling the user said is the same account as one of them. */
+    private fun withSpellings(list: List<Account>): List<Account> {
+        if (aliases.isEmpty()) return list
+        val set = list.toSet()
+        return list + aliases.filterValues { it in set }.keys
     }
 
     /** Applies one decision. Returns true when a new ledger row was added. */

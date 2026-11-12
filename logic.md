@@ -464,14 +464,16 @@ Each discovered account is shown once with its message count and date range. The
 - `not_mine` accounts: their messages are stored with status `ignored: not_mine`, never counted, never asked about again.
 - A **new** account discovered later (new digits at a known bank, or a new wallet) creates a "New account" review item. Its transactions are held as `pending` until answered.
 
-### 8.3.1 Only repeated accounts are asked about [Decided 2026-11-12]
+### 8.3.1 Which accounts are asked about [Decided 2026-11-12, revised the same day]
 
-Raw messages name many account numbers that are not the user's: the other party in a transfer, a beneficiary, a one-off card. Asking about each one floods the first-run list.
+Raw messages name many account numbers that are not the user's: the other party in a transfer, a beneficiary. Asking about each one floods the first-run list, and counting them is wrong.
 
-- An account or wallet is put to the user (first run, and later as "New account") **only once 10 or more transaction-shaped messages name it** (`ACCOUNT_MIN_MESSAGES`).
-- Below that, the account's messages are **held, not dropped**: they are counted towards the 10 and read in full if the user later answers Mine.
-- If no account in the inbox reaches 10 (a new phone, a cleared inbox), first run lists everything found instead of nothing.
-- A message that names two accounts is placed by the one the user confirmed as Mine, wherever it sits in the text.
+- Only an account the message wording marks as **the user's own** (8.6) is ever collected, counted or asked about. The other party's number is dropped where the message is read.
+- An account or wallet is put to the user (first run, and later as "New account") **once 3 or more transaction-shaped messages name it as the user's own** (`ACCOUNT_MIN_MESSAGES`). The bar only has to keep out one-off misreads.
+- Below that, the account's messages are **held, not dropped**: they count towards the 3 and are read in full if the user later answers Mine.
+- If no account in the inbox reaches the bar (a new phone, a cleared inbox), first run lists every own account found instead of nothing.
+- Each account is shown with its kind (**Bank account**, **Card**, **Wallet**), how many messages name it, and its last transaction.
+- **Nothing is selected in advance.** The user must choose Mine or Not mine for each account before Done works; an account left unanswered is not saved.
 - Changing an answer in Settings makes the ledger agree: **Not mine** removes that account's transactions and open questions; **Mine** reads its past messages again.
 
 ### 8.4 Merging and splitting [Decided]
@@ -507,6 +509,39 @@ After a merge or split, `recompute()` runs (section 16) and self-transfer links 
 
 ### 8.5 Matching a message to an account
 Matching is done by `accountEvidence` (8.0). In short: wallet by confirmed wallet sender; everything else by digits first, sender second.
+
+### 8.6 Whose account a number is [Decided 2026-11-12]
+
+A bank alert often names two accounts: the user's and the other party's ("debited from a/c XX4821 and credited to a/c XX7777"). The words just before each number decide whose it is:
+
+| Wording next to the number | Debit message | Credit message |
+|---|---|---|
+| `beneficiary`, `payee`, `receiver`, `recipient` (before or just after) | other party | other party |
+| `your` | user's own | user's own |
+| `from` | user's own | other party |
+| `to`, `towards`, `into` | other party | user's own |
+| `in` | undecided | user's own |
+| `by` | undecided | other party |
+| no clue | undecided | undecided |
+
+The last such word before the number wins ("sent to RAHUL **from** a/c XX4821" is the user's). The look-back never reaches past the previous account number.
+
+Resolving a message:
+- If any number is marked as the user's own, those are the message's accounts.
+- Otherwise the first undecided number is the account the alert is about ("A/c XX4821 debited … credited to a/c XX7777").
+- If every number is the other party's, the message says nothing about the user's money and is skipped (`no_account`).
+
+A number that follows the word "card" is a **Card**; any other is a **Bank account**. The kind is shown to the user and never changes how money is counted.
+
+### 8.7 "Same account?" as built [Decided 2026-11-12]
+
+This replaces the silent merges of 8.2 for now: **nothing is merged on a guess.**
+
+- After discovery, every two bank accounts or cards where one number ends with the other (3 digits or more) are put to the user as one question, **Same account · Different**, before the Mine / Not mine step. This covers "XX821" and "XX4821" at one bank, a mask and the full number, and the same digits under two sender names.
+- **Same:** the accounts become one. The spelling with the most digits stands for the group; the others are kept as aliases, so a later message written either way, from either sender, lands on the one account without a question.
+- **Different:** both stay, and the pair is never asked about again.
+- Answers are stored and shown pre-filled if set-up is run again.
+- Not built yet: asking "Same account?" for an account that first appears after set-up (it gets a "New account" card instead), and splitting a merged account from Settings.
 
 ---
 
