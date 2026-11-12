@@ -60,6 +60,25 @@ class BigInboxTest {
     }
 
     @Test
+    fun `only accounts named in ten or more messages are put to the user`() {
+        val strays = listOf(
+            RawSms("s1", "AD-HDFCBK-S", "Rs.500.00 debited from a/c XX4821 and credited to a/c XX7777. UPI Ref 611111111111", now.minusDays(3)),
+            RawSms("s2", "AD-HDFCBK-S", "Rs.900.00 credited to a/c XX8888 of your beneficiary. Ref 622222222222", now.minusDays(2)),
+            RawSms("s3", "JD-CUBANK", "Rs 75 debited from a/c XX3333 at KIOSK. Ref 633333333333", now.minusDays(1)),
+        )
+        val s = store()
+        s.startDiscovery(inbox(400) + strays)
+        val listed = s.discovery!!.accounts
+        assertEquals(setOf("HDFCBK|4821", "CUBANK|1234", "ICICIB|9005", "AMAZONPAY|WALLET"), listed.map { it.account.key }.toSet())
+        assertTrue(listed.all { it.messages >= 10 })
+        // The one-off numbers raise no question after the import either.
+        s.confirmAccounts(listed.associate { it.account to true }, 1)
+        assertTrue(s.needs.none { it is com.smsledger.ui.model.NeedsItem.NewAccount })
+        // The payment that named both the user's account and the other party's is still counted.
+        assertTrue(s.transactions.any { it.amountPaise == 50_000L && it.accountKey == "HDFCBK|4821" && it.upiRef == "611111111111" })
+    }
+
+    @Test
     fun `importing in steps gives the same ledger as importing at once`() {
         val messages = inbox(3_000)
         val whole = store().also { it.startDiscovery(messages); it.confirmAccounts(it.discovery!!.accounts.associate { a -> a.account to true }, 1) }

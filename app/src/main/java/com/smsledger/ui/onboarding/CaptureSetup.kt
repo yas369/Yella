@@ -186,7 +186,7 @@ private fun ConfirmStep(
         Text("Which accounts are yours?", style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(Space.S))
         Text(
-            "Only accounts marked Mine are counted. A family member's account on your number? Mark it Not mine and it's never asked again.",
+            "These appear again and again in your messages. Only accounts marked Mine are counted. A family member's account on your number? Mark it Not mine and it's never asked again.",
             style = MaterialTheme.typography.bodyLarge,
             color = c.textSecondary,
         )
@@ -208,7 +208,13 @@ private fun ConfirmStep(
     }
 }
 
-private fun evidence(f: FoundAccount): String {
+private fun evidence(f: FoundAccount): String = when (f.messages) {
+    0 -> lastSeen(f)
+    1 -> "In 1 message · ${lastSeen(f)}"
+    else -> "In ${f.messages} messages · ${lastSeen(f)}"
+}
+
+private fun lastSeen(f: FoundAccount): String {
     val amount = f.lastAmountPaise ?: return "Last message ${dayLabel(f.lastAt.toLocalDate())}"
     val what = when (f.lastDirection) {
         Direction.Debit -> "debited"

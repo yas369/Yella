@@ -464,6 +464,16 @@ Each discovered account is shown once with its message count and date range. The
 - `not_mine` accounts: their messages are stored with status `ignored: not_mine`, never counted, never asked about again.
 - A **new** account discovered later (new digits at a known bank, or a new wallet) creates a "New account" review item. Its transactions are held as `pending` until answered.
 
+### 8.3.1 Only repeated accounts are asked about [Decided 2026-11-12]
+
+Raw messages name many account numbers that are not the user's: the other party in a transfer, a beneficiary, a one-off card. Asking about each one floods the first-run list.
+
+- An account or wallet is put to the user (first run, and later as "New account") **only once 10 or more transaction-shaped messages name it** (`ACCOUNT_MIN_MESSAGES`).
+- Below that, the account's messages are **held, not dropped**: they are counted towards the 10 and read in full if the user later answers Mine.
+- If no account in the inbox reaches 10 (a new phone, a cleared inbox), first run lists everything found instead of nothing.
+- A message that names two accounts is placed by the one the user confirmed as Mine, wherever it sits in the text.
+- Changing an answer in Settings makes the ledger agree: **Not mine** removes that account's transactions and open questions; **Mine** reads its past messages again.
+
 ### 8.4 Merging and splitting [Decided]
 
 **Same account → merge**

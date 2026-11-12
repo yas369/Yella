@@ -17,6 +17,11 @@ object SmsDefaults {
     const val CATCH_UP_OVERLAP_DAYS = 3L
     /** A message matches a learned template when this share of its words is the same (logic.md §9). */
     const val TEMPLATE_OVERLAP = 0.8
+    /**
+     * An account or wallet is put to the user ("is this yours?") only once this many transaction
+     * messages name it. One-off numbers in a message (the other party's account, a reference) never reach it.
+     */
+    const val ACCOUNT_MIN_MESSAGES = 10
     const val FEE_CAP_PAISE = 5_000L
     const val FEE_PERCENT = 2L
 

@@ -120,14 +120,21 @@ object SmsIngest {
         val parsed: ParseResult.Parsed? = learned?.second ?: TransactionParser.parse(sms.body) as? ParseResult.Parsed
 
         // The account gate (§8.0): a message that names no account of the user's creates nothing.
-        val digits = Patterns.maskedDigits(sms.body)
-        if (digits == null) {
+        val runs = Patterns.allMaskedDigits(sms.body)
+        if (runs.isEmpty()) {
             if (parsed == null || ctx.mine.isEmpty()) return Outcome.Skip(SkipReason.NoAccount)
             val atBank = ctx.mine.filter { it.brand == brand }
             val structured = parsed.upiRef != null || Patterns.hasBalance(sms.body)
             return if (atBank.size == 1 && structured) add(sms, atBank.single(), parsed, ctx) else ask(brand, null, atBank.ifEmpty { ctx.mine }, parsed)
         }
-        return when (val match = AccountMatcher.match(brand, digits, ctx.mine + ctx.notMine)) {
+        // A message can name two accounts, the user's and the other party's: the user's own decides.
+        val known = ctx.mine + ctx.notMine
+        val matches = runs.map { it to AccountMatcher.match(brand, it, known) }
+        val (digits, match) = matches.firstOrNull { (_, m) -> m is AccountMatch.Matched && m.account in ctx.mine }
+            ?: matches.firstOrNull { (_, m) -> m is AccountMatch.Ambiguous && m.candidates.any { it in ctx.mine } }
+            ?: matches.firstOrNull { (_, m) -> m !is AccountMatch.Unknown }
+            ?: matches.first()
+        return when (match) {
             is AccountMatch.Matched -> when {
                 match.account in ctx.notMine -> Outcome.Ignore
                 parsed == null -> Outcome.Unreadable(match.account)
@@ -197,7 +204,14 @@ object SmsIngest {
 }
 
 /** An account found by discovery, with the latest message that shows it (shown as evidence, §8.2). */
-data class FoundAccount(val account: Account, val lastAmountPaise: Long?, val lastDirection: Direction?, val lastAt: LocalDateTime)
+data class FoundAccount(
+    val account: Account,
+    val lastAmountPaise: Long?,
+    val lastDirection: Direction?,
+    val lastAt: LocalDateTime,
+    /** How many transaction messages name this account. */
+    val messages: Int = 0,
+)
 
 data class DiscoveryResult(val senders: Map<String, SenderKind>, val accounts: List<FoundAccount>)
 
@@ -213,23 +227,33 @@ object SmsDiscovery {
             byBrand.getOrPut(brand) { mutableListOf() } += sms
         }
         val senders = byBrand.mapValues { (brand, list) -> SenderClassifier.classify(brand, list.map { it.body }) }
-        val accounts = byBrand.flatMap { (brand, list) ->
+        val found = byBrand.flatMap { (brand, list) ->
             when (senders[brand]) {
-                SenderKind.Bank -> SenderClassifier.accounts(brand, list.map { it.body }).map { digits ->
-                    val last = list.last { sms ->
-                        TransactionParser.parse(sms.body) is ParseResult.Parsed && Patterns.allMaskedDigits(sms.body).any { digits.endsWith(it) }
+                SenderKind.Bank -> {
+                    // Each message is read once: the digit runs of every transaction-shaped message.
+                    val shaped = list.filter { TransactionParser.parse(it.body) is ParseResult.Parsed }.map { it to Patterns.allMaskedDigits(it.body) }
+                    val seen = shaped.flatMap { it.second }.distinct()
+                    // "821" and "4821" are one account written two ways: only the longer is listed.
+                    seen.filter { digits -> seen.none { it.length > digits.length && it.endsWith(digits) } }.map { digits ->
+                        val naming = shaped.filter { (_, runs) -> runs.any { digits.endsWith(it) } }
+                        evidence(Account(brand, digits), naming.last().first, naming.size)
                     }
-                    evidence(Account(brand, digits), last)
                 }
-                SenderKind.Wallet -> listOf(evidence(Account(brand, Account.WALLET), list.last()))
+                SenderKind.Wallet -> {
+                    val shaped = list.filter { WalletRules.classify(it.body) != WalletKind.Unknown && Patterns.transactionAmount(it.body) != null }
+                    listOf(evidence(Account(brand, Account.WALLET), shaped.lastOrNull() ?: list.last(), shaped.size))
+                }
                 else -> emptyList()
             }
         }
-        return DiscoveryResult(senders, accounts)
+        // Only accounts the phone hears from again and again are put to the user. An inbox too small
+        // for any account to get there (a new phone) falls back to everything found.
+        val frequent = found.filter { it.messages >= SmsDefaults.ACCOUNT_MIN_MESSAGES }
+        return DiscoveryResult(senders, frequent.ifEmpty { found })
     }
 
-    private fun evidence(account: Account, sms: RawSms): FoundAccount {
+    private fun evidence(account: Account, sms: RawSms, messages: Int): FoundAccount {
         val parsed = TransactionParser.parse(sms.body) as? ParseResult.Parsed
-        return FoundAccount(account, parsed?.amountPaise ?: Patterns.transactionAmount(sms.body), parsed?.direction, sms.at)
+        return FoundAccount(account, parsed?.amountPaise ?: Patterns.transactionAmount(sms.body), parsed?.direction, sms.at, messages)
     }
 }

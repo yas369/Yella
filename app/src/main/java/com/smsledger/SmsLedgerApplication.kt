@@ -42,7 +42,7 @@ class SmsLedgerApplication : Application() {
         val since = if (full) 0L else store.lastScanMillis - OVERLAP_MS
         val read = withContext(Dispatchers.IO) { SmsInbox.read(this@SmsLedgerApplication, since) }
         store.ingestScan(read.messages, read.newestMillis)
-        if (full) store.rescanFromMillis = null
+        if (full) store.finishRescan()
         val spent = store.spentTodayPaise
         WidgetSnapshot.publish(this, limitStatus(spent, store.limitPaise), spent, store.limitPaise)
         LedgerNotifications.postDue(this, store)

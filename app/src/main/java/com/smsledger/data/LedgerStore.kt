@@ -116,6 +116,11 @@ class LedgerStore(
     /** Full template key → learned answer (§7). */
     val templates = mutableStateMapOf<String, TemplateRecord>()
     private val processed = HashSet<String>()
+    /** Account key → messages that named it while it was still unknown; a card is raised at [SmsDefaults.ACCOUNT_MIN_MESSAGES]. */
+    private val sightings = HashMap<String, MutableSet<String>>()
+    private var sightingsChanged = false
+    /** Accounts just switched to Mine: their already-skipped messages are read again on the next full scan. */
+    private val rereadAccounts = HashSet<Account>()
     private var nextNeedId = 1L
 
     /** Accounts found by discovery, waiting for Mine / Not mine. In memory only. */
@@ -157,6 +162,11 @@ class LedgerStore(
         alertDay = prefs.alertDay
         alertsSent = prefs.alertsSent.split(',').mapNotNull { name -> LimitAlert.entries.firstOrNull { it.name == name } }.toSet()
         categories = categoriesWith(prefs.notDaily)
+        sightings.clear()
+        prefs.sightings.forEach { entry ->
+            val parts = entry.split('\t')
+            if (parts.size == 2) sightings.getOrPut(parts[0]) { HashSet() } += parts[1]
+        }
         lentReminderMonth = prefs.lentReminderMonth.takeIf { it.isNotEmpty() }?.let { runCatching { YearMonth.parse(it) }.getOrNull() }
         loaded = true
     }
@@ -169,6 +179,7 @@ class LedgerStore(
         onboarded, limitPaise, darkOverride, automatic, lastScanMillis,
         limitAlerts, lentReminder, alertDay, alertsSent.joinToString(",") { it.name }, lentReminderMonth?.toString().orEmpty(),
         notDaily = categories.filterNot { it.countsDaily }.joinToString(",") { it.id },
+        sightings = sightings.flatMapTo(HashSet()) { (account, keys) -> keys.map { "$account\t$it" } },
     )
 
     /** null = never changed: the product defaults (bills, rent and EMI don't count). */
@@ -250,6 +261,9 @@ class LedgerStore(
         alertsSent = emptySet()
         lentReminderMonth = null
         categories = DefaultCategories
+        sightings.clear()
+        rereadAccounts.clear()
+        rescanFromMillis = null
         onboarded = false
     }
 
@@ -625,17 +639,47 @@ class LedgerStore(
         return added
     }
 
-    /** Settings → Accounts: change a Mine / Not mine answer. Past rows stay; new SMS follow the answer. */
+    /**
+     * Settings → Accounts: change a Mine / Not mine answer, and make the ledger agree with it.
+     * Not mine removes that account's transactions and questions; Mine reads its past messages again.
+     */
     fun setAccountMine(account: Account, mine: Boolean): String = write {
         val index = accounts.indexOfFirst { it.account == account }
+        if (index >= 0 && accounts[index].mine == mine) return@write ""
         if (index >= 0) accounts[index] = AccountState(account, mine) else accounts += AccountState(account, mine)
-        if (mine) "${account.label} is yours" else "${account.label} won't be counted"
+        if (mine) {
+            rereadAccounts += account
+            rescanFromMillis = Long.MIN_VALUE
+            return@write "${account.label} is yours · its messages are being read"
+        }
+        rereadAccounts -= account
+        val rows = transactions.filter { it.accountKey == account.key }
+        rows.filter { it.kind == TxKind.Lent }.forEach { lentBook = lentBook.cancelLend(it.payee, it.amountPaise) }
+        val ids = rows.mapTo(HashSet()) { it.id }
+        transactions.removeAll(rows.toSet())
+        needs.removeAll { item ->
+            when (item) {
+                is NeedsItem.Unreadable -> item.accountKey == account.key
+                is NeedsItem.NewPayee -> item.txId in ids
+                is NeedsItem.PossibleTransfer -> item.outTxId in ids || item.inTxId in ids
+                else -> false
+            }
+        }
+        val count = if (rows.size == 1) "1 transaction" else "${rows.size} transactions"
+        "${account.label} won't be counted · $count removed"
+    }
+
+    /** The app calls this after the full inbox scan an answer asked for. */
+    fun finishRescan() {
+        rescanFromMillis = null
+        rereadAccounts.clear()
     }
 
     /** "New account found" (§4): saves the answer; if mine, its messages are read on the next scan. */
     fun answerNewAccount(item: NeedsItem.NewAccount, mine: Boolean): String = write {
         val account = Account.fromKey(item.accountKey) ?: return@write ""
         needs.removeAll { it is NeedsItem.NewAccount && it.accountKey == item.accountKey }
+        if (sightings.remove(item.accountKey) != null) sightingsChanged = true
         accounts.removeAll { it.account == account }
         accounts += AccountState(account, mine)
         senders[account.brand] = if (account.isWallet) SenderKind.Wallet else SenderKind.Bank
@@ -669,7 +713,20 @@ class LedgerStore(
      * is sorted once, so a first import of thousands of messages stays fast.
      */
     fun ingest(messages: List<RawSms>): Int {
-        val fresh = messages.filter { it.key !in processed }.sortedBy { it.at }
+        // Messages of an account just switched to Mine were skipped before: they are read again,
+        // unless the ledger already holds the row that message made.
+        val reread = rereadAccounts.toList()
+        val have = if (reread.isEmpty()) emptySet() else transactions.mapNotNullTo(HashSet()) { tx -> tx.sms?.let { it to tx.at } }
+        fun again(sms: RawSms): Boolean {
+            if (reread.isEmpty() || (sms.body to sms.at) in have) return false
+            val brand = SenderNormalizer.brand(sms.sender) ?: return false
+            val atBrand = reread.filter { it.brand == brand }
+            if (atBrand.isEmpty()) return false
+            if (atBrand.any { it.isWallet }) return true
+            val runs = Patterns.allMaskedDigits(sms.body)
+            return atBrand.any { account -> runs.any { Patterns.compatible(account.digits, it) } }
+        }
+        val fresh = messages.filter { it.key !in processed || again(it) }.sortedBy { it.at }
         if (fresh.isEmpty()) return 0
         val done = ArrayList<String>(fresh.size)
         var added = 0
@@ -700,6 +757,10 @@ class LedgerStore(
         }
         processed += done
         disk.markProcessed(done)
+        if (sightingsChanged) {
+            sightingsChanged = false
+            disk.savePrefs(prefs())
+        }
         return added
     }
 
@@ -755,8 +816,16 @@ class LedgerStore(
                 return false
             }
             is Outcome.NewAccount -> {
-                if (needs.none { it is NeedsItem.NewAccount && it.accountKey == outcome.account.key }) {
-                    needs += NeedsItem.NewAccount(nextNeedId++, outcome.account.key, outcome.account.label, brand, sms.body, sms.at)
+                // An unknown account is asked about only once enough messages name it. Until then
+                // its messages wait unread, so nothing is lost if it turns out to be the user's.
+                val key = outcome.account.key
+                if (needs.none { it is NeedsItem.NewAccount && it.accountKey == key }) {
+                    val seen = sightings.getOrPut(key) { HashSet() }
+                    if (seen.add(sms.key)) sightingsChanged = true
+                    if (seen.size >= SmsDefaults.ACCOUNT_MIN_MESSAGES) {
+                        sightings.remove(key)
+                        needs += NeedsItem.NewAccount(nextNeedId++, key, outcome.account.label, brand, sms.body, sms.at)
+                    }
                 }
                 return false
             }

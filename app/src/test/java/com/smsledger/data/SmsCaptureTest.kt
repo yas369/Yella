@@ -129,15 +129,60 @@ class SmsCaptureTest {
     }
 
     @Test
-    fun `a new account at a known bank is asked once, then its message is read (spec 4)`() {
+    fun `a new account is asked about only after ten messages name it, then all of them are read`() {
         val s = store().setUp()
-        val newMsg = sms("HDFCBK", "Rs 100 debited from a/c XX5555")
-        s.ingestScan(listOf(newMsg), newestMillis = 8)
+        val messages = (1..10).map { i -> sms("HDFCBK", "Rs ${100 + i} debited from a/c XX5555 at SHOP $i", now.minusMinutes(60L - i)) }
+        s.ingestScan(messages.take(9), newestMillis = 8)
+        assertTrue(s.needs.none { it is NeedsItem.NewAccount })
+        // Reading the same nine again (the catch-up overlap) does not count them twice.
+        s.ingestScan(messages.take(9), newestMillis = 8)
+        assertTrue(s.needs.none { it is NeedsItem.NewAccount })
+        s.ingestScan(messages, newestMillis = 9)
         val ask = s.needs.filterIsInstance<NeedsItem.NewAccount>().single()
         s.answerNewAccount(ask, mine = true)
         assertNotNull(s.rescanFromMillis)
-        s.ingestScan(listOf(newMsg), newestMillis = 9) // the rescan the app runs next
-        assertTrue(s.transactions.any { it.accountKey == "HDFCBK|5555" })
+        s.ingestScan(messages, newestMillis = 10) // the rescan the app runs next
+        assertEquals(10, s.transactions.count { it.accountKey == "HDFCBK|5555" })
+    }
+
+    @Test
+    fun `how often an unknown account was seen survives a restart`() {
+        val messages = (1..10).map { i -> sms("HDFCBK", "Rs ${100 + i} debited from a/c XX5555 at SHOP $i", now.minusMinutes(60L - i)) }
+        store().setUp().ingestScan(messages.take(9), newestMillis = 8)
+        val reopened = store()
+        reopened.ingestScan(messages.drop(9), newestMillis = 9)
+        assertEquals(1, reopened.needs.count { it is NeedsItem.NewAccount })
+    }
+
+    @Test
+    fun `Not mine removes the account's transactions and Mine reads them back`() {
+        val s = store().setUp()
+        val account = Account("HDFCBK", "4821")
+        val before = s.transactions.count { it.accountKey == account.key }
+        assertTrue(before > 0)
+        s.setAccountMine(account, false)
+        assertEquals(0, s.transactions.count { it.accountKey == account.key })
+        assertFalse(account in s.mineAccounts)
+
+        s.setAccountMine(account, true)
+        assertNotNull(s.rescanFromMillis)
+        s.ingestScan(inbox, newestMillis = 11) // the rescan the app runs next
+        s.finishRescan()
+        assertEquals(before, s.transactions.count { it.accountKey == account.key })
+        // A later scan of the same inbox adds nothing more.
+        s.ingestScan(inbox, newestMillis = 12)
+        assertEquals(before, s.transactions.count { it.accountKey == account.key })
+    }
+
+    @Test
+    fun `an account marked Not mine at set-up can be switched to Mine later`() {
+        val account = Account("CUBANK", "1234")
+        val s = store().setUp(notMine = setOf(account))
+        assertEquals(0, s.transactions.count { it.accountKey == account.key })
+        s.setAccountMine(account, true)
+        s.ingestScan(inbox, newestMillis = 11)
+        s.finishRescan()
+        assertEquals(1, s.transactions.count { it.accountKey == account.key })
     }
 
     @Test

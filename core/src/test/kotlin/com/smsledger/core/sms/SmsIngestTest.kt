@@ -8,6 +8,17 @@ import java.time.LocalDateTime
 /** One SMS in, one decision out. Synthetic messages only. */
 class SmsIngestTest {
 
+    @Test
+    fun `a message naming two accounts is placed by the user's own, wherever it sits`() {
+        val mine = Account("HDFCBK", "4821")
+        val ctx = IngestContext(senders = mapOf("HDFCBK" to SenderKind.Bank), mine = listOf(mine), notMine = emptyList())
+        val out = SmsIngest.process(
+            RawSms("two", "AD-HDFCBK-S", "Rs 300 credited to beneficiary a/c XX7777 and debited from your a/c XX4821", LocalDateTime.of(2026, 10, 24, 12, 0)),
+            ctx,
+        )
+        assertEquals(mine, (out as Outcome.Add).account)
+    }
+
     private val t0 = LocalDateTime.of(2026, 10, 24, 12, 0)
     private val hdfc = Account("HDFCBK", "4821")
     private val hdfc2 = Account("HDFCBK", "9821")
