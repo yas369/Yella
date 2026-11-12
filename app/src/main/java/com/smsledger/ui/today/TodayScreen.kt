@@ -8,6 +8,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
@@ -23,18 +24,24 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import com.smsledger.core.limit.LimitStatus
 import com.smsledger.core.money.formatRupeesWhole
-import com.smsledger.ui.components.Emphasis
-import com.smsledger.ui.components.LedgerButton
+import com.smsledger.ui.components.Chevron
+import com.smsledger.ui.components.GroupPosition
+import com.smsledger.ui.components.GroupedSection
 import com.smsledger.ui.components.LimitHero
 import com.smsledger.ui.components.RowDivider
 import com.smsledger.ui.components.SectionHeader
 import com.smsledger.ui.components.TransactionRow
+import com.smsledger.ui.components.grouped
 import com.smsledger.ui.model.Category
 import com.smsledger.ui.model.Tx
+import com.smsledger.ui.theme.LargeTitleStyle
 import com.smsledger.ui.theme.LedgerTheme
+import com.smsledger.ui.theme.SectionStyle
 import com.smsledger.ui.theme.Size
 import com.smsledger.ui.theme.Space
 import java.time.LocalDate
@@ -57,8 +64,8 @@ data class TodayState(
 )
 
 /**
- * Home (design.md §7), top to bottom and nothing else: the day's answer, the month in one line,
- * the review entry (only when there is something to review), recent rows.
+ * Home (design.md §7), top to bottom: the date and large title, the day's answer in its own
+ * section, a section with the month and the review entry, then recent rows as one section.
  */
 @Composable
 fun TodayScreen(
@@ -73,76 +80,99 @@ fun TodayScreen(
 ) {
     val today = LocalDate.now()
     val c = LedgerTheme.colors
+    val motion = MaterialTheme.motionScheme
     LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = contentPadding) {
         item(key = "statusBar") { Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars)) }
-        item(key = "hero") {
-            Column(Modifier.padding(start = Space.Gutter, end = Space.Gutter, top = Space.XL, bottom = Space.XL)) {
-                LimitHero(state.status, state.spentPaise, state.limitPaise)
+        item(key = "title") {
+            Column(Modifier.padding(start = Space.Gutter, end = Space.Gutter, top = Space.L, bottom = Space.M)) {
+                Text(
+                    today.format(DateTimeFormatter.ofPattern("EEEE, d MMMM")).uppercase(),
+                    style = SectionStyle.copy(fontWeight = FontWeight.SemiBold),
+                    color = c.textSecondary,
+                )
+                Text("Today", style = LargeTitleStyle, color = c.text)
             }
         }
-        item(key = "month") {
-            RowDivider()
-            Text(
-                "${formatRupeesWhole(state.monthSpentPaise)} spent in ${today.format(DateTimeFormatter.ofPattern("MMMM"))}",
-                style = MaterialTheme.typography.bodyLarge.copy(fontFeatureSettings = "tnum"),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onOpenHistory)
-                    .defaultMinSize(minHeight = Size.Row)
-                    .padding(horizontal = Space.Gutter, vertical = Space.L),
-            )
+        item(key = "hero") {
+            GroupedSection { LimitHero(state.status, state.spentPaise, state.limitPaise, Modifier.padding(Space.L)) }
         }
-        item(key = "needs") {
-            AnimatedVisibility(
-                state.needsCount > 0,
-                enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()) + expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec()),
-                exit = fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()) + shrinkVertically(MaterialTheme.motionScheme.defaultSpatialSpec()),
-            ) {
-                Column {
+        item(key = "summary") {
+            GroupedSection(Modifier.padding(top = Space.L)) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onOpenHistory)
+                        .defaultMinSize(minHeight = Size.Row)
+                        .padding(horizontal = Space.L, vertical = Space.M),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "${formatRupeesWhole(state.monthSpentPaise)} spent in ${today.format(DateTimeFormatter.ofPattern("MMMM"))}",
+                        style = MaterialTheme.typography.bodyLarge.copy(fontFeatureSettings = "tnum"),
+                        modifier = Modifier.weight(1f),
+                    )
+                    Chevron()
+                }
+                AnimatedVisibility(
+                    state.needsCount > 0,
+                    enter = fadeIn(motion.defaultEffectsSpec()) + expandVertically(motion.defaultSpatialSpec()),
+                    exit = fadeOut(motion.defaultEffectsSpec()) + shrinkVertically(motion.defaultSpatialSpec()),
+                ) {
+                    Column {
+                        RowDivider()
+                        NeedsEntryRow(state.needsCount, onOpenNeeds)
+                    }
+                }
+                if (state.captureOff) {
                     RowDivider()
-                    NeedsEntryRow(state.needsCount, onOpenNeeds)
+                    Text(
+                        "Automatic capture is off · Turn on",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = c.accent,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onTurnOnCapture)
+                            .defaultMinSize(minHeight = Size.Row)
+                            .padding(horizontal = Space.L, vertical = Space.L),
+                    )
                 }
             }
         }
-        if (state.captureOff) {
-            item(key = "captureOff") {
-                RowDivider()
-                Text(
-                    "Automatic capture is off · Turn on",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = c.accent,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(onClick = onTurnOnCapture)
-                        .defaultMinSize(minHeight = Size.Row)
-                        .padding(horizontal = Space.Gutter, vertical = Space.L),
-                )
-            }
-        }
-        item(key = "recentHeader") {
-            RowDivider()
-            SectionHeader("Recent")
-        }
+        item(key = "recentHeader") { SectionHeader("Recent") }
         val recent = state.recent.take(RECENT_ROWS)
         if (recent.isEmpty()) {
             item(key = "empty") {
-                Text(
-                    if (state.captureOff) "No transactions yet. Tap + to add one." else "No transactions yet. They'll appear here as bank SMS arrive.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = c.textSecondary,
-                    modifier = Modifier.padding(horizontal = Space.Gutter, vertical = Space.S),
-                )
+                GroupedSection {
+                    Text(
+                        if (state.captureOff) "No transactions yet. Tap + to add one." else "No transactions yet. They'll appear here as bank SMS arrive.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = c.textSecondary,
+                        modifier = Modifier.padding(Space.L),
+                    )
+                }
             }
         } else {
+            // The rows and "See all" read as one section: only its outer corners are rounded.
             itemsIndexed(recent, key = { _, tx -> tx.id }) { index, tx ->
-                Column(Modifier.animateItem()) {
+                Column(Modifier.animateItem().grouped(GroupPosition.of(index, recent.size + 1))) {
                     if (index > 0) RowDivider()
                     TransactionRow(tx, categoryOf(tx.categoryId), onClick = { onTxClick(tx) }, showDay = true)
                 }
             }
             item(key = "seeAll") {
-                RowDivider()
-                LedgerButton("See all", onOpenHistory, Modifier.padding(horizontal = Space.S, vertical = Space.S), Emphasis.Text)
+                Column(Modifier.grouped(GroupPosition.Last)) {
+                    RowDivider()
+                    Text(
+                        "See all",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = c.accent,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onOpenHistory)
+                            .defaultMinSize(minHeight = Size.Touch)
+                            .padding(horizontal = Space.L, vertical = Space.M),
+                    )
+                }
             }
         }
         // Room for the add button so it never covers the last row.

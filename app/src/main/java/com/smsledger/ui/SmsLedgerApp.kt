@@ -147,7 +147,9 @@ fun SmsLedgerApp(store: LedgerStore) {
         },
         label = "overlay",
     ) { shown -> when (shown) {
-        Overlay.Capture -> CaptureSetupFlow(store, onFinished = { overlay = Overlay.None })
+        Overlay.Capture -> androidx.compose.material3.Surface(Modifier.fillMaxSize(), color = LedgerTheme.colors.bg) {
+            CaptureSetupFlow(store, onFinished = { overlay = Overlay.None })
+        }
         Overlay.Accounts -> Box(Modifier.fillMaxSize()) {
             AccountsScreen(store.accounts, onBack = { overlay = Overlay.None }) { account, mine -> store.act(notifier) { setAccountMine(account, mine) } }
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
@@ -177,7 +179,7 @@ fun SmsLedgerApp(store: LedgerStore) {
                     // The screen's one filled action: add a transaction by hand.
                     FloatingActionButton(
                         onClick = { sheets.adding = true },
-                        shape = Radius.Card,
+                        shape = Radius.Pill,
                         containerColor = LedgerTheme.colors.accent,
                         contentColor = LedgerTheme.colors.onAccent,
                         elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
@@ -201,13 +203,13 @@ fun SmsLedgerApp(store: LedgerStore) {
 private fun LedgerNavBar(selected: Tab, onSelect: (Tab) -> Unit) {
     val c = LedgerTheme.colors
     Column {
-        HorizontalDivider(thickness = 1.dp, color = c.divider)
+        HorizontalDivider(thickness = 0.5.dp, color = c.divider)
         NavigationBar(containerColor = c.surface, tonalElevation = 0.dp) {
             Tab.entries.forEach { item ->
                 NavigationBarItem(
                     selected = selected == item,
                     onClick = { onSelect(item) },
-                    label = { Text(item.label, style = MaterialTheme.typography.bodySmall) },
+                    label = { Text(item.label, style = MaterialTheme.typography.labelSmall) },
                     icon = { Icon(if (selected == item) item.selectedIcon else item.icon, contentDescription = null) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = c.accent,

@@ -50,7 +50,6 @@ internal fun NeedsCard(
         modifier.fillMaxWidth(),
         color = c.surface,
         shape = Radius.Card,
-        border = BorderStroke(1.dp, c.divider),
     ) {
         Column(Modifier.padding(Space.L), verticalArrangement = Arrangement.spacedBy(Space.M)) {
             when (item) {

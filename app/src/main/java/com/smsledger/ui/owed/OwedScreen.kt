@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.ArrowBackIosNew
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -40,7 +40,9 @@ import androidx.compose.ui.semantics.semantics
 import com.smsledger.core.money.formatRupees
 import com.smsledger.ui.components.Emphasis
 import com.smsledger.ui.components.LedgerButton
+import com.smsledger.ui.components.GroupPosition
 import com.smsledger.ui.components.RowDivider
+import com.smsledger.ui.components.grouped
 import com.smsledger.ui.model.Debtor
 import com.smsledger.ui.theme.LedgerTheme
 import com.smsledger.ui.theme.MoneyStyles
@@ -58,7 +60,7 @@ fun OwedScreen(debtors: List<Debtor>, onBack: () -> Unit, onRepaid: (Debtor) -> 
         topBar = {
             TopAppBar(
                 title = { Text("Owed to you") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back") } },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Outlined.ArrowBackIosNew, contentDescription = "Back", tint = LedgerTheme.colors.accent) } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = c.bg, scrolledContainerColor = c.bg),
             )
         },
@@ -76,12 +78,12 @@ fun OwedScreen(debtors: List<Debtor>, onBack: () -> Unit, onRepaid: (Debtor) -> 
                     },
                     style = MaterialTheme.typography.bodyLarge.copy(fontFeatureSettings = "tnum"),
                     color = if (debtors.isEmpty()) c.textSecondary else c.text,
-                    modifier = Modifier.padding(horizontal = Space.Gutter, vertical = Space.M),
+                    modifier = Modifier.padding(horizontal = Space.Gutter + Space.L, vertical = Space.M),
                 )
             }
             itemsIndexed(debtors, key = { _, d -> d.id }) { index, debtor ->
-                Column(Modifier.animateItem()) {
-                    if (index == 0) RowDivider()
+                Column(Modifier.animateItem().grouped(GroupPosition.of(index, debtors.size))) {
+                    if (index > 0) RowDivider()
                     DebtorRow(
                         debtor,
                         expanded = expandedId == debtor.id,
@@ -89,7 +91,6 @@ fun OwedScreen(debtors: List<Debtor>, onBack: () -> Unit, onRepaid: (Debtor) -> 
                         onRepaid = { onRepaid(debtor) },
                         onWriteOff = { confirmWriteOff = debtor.id },
                     )
-                    RowDivider()
                 }
             }
         }

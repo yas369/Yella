@@ -2,6 +2,7 @@ package com.smsledger.ui.onboarding
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,9 +38,9 @@ import com.smsledger.sms.SmsInbox
 import com.smsledger.ui.components.BigChoice
 import com.smsledger.ui.components.ConnectedChoice
 import com.smsledger.ui.components.Emphasis
-import com.smsledger.ui.components.RowDivider
 import com.smsledger.ui.model.dayLabel
 import com.smsledger.ui.theme.LedgerTheme
+import com.smsledger.ui.theme.Radius
 import com.smsledger.ui.theme.Space
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -153,9 +154,9 @@ private fun ReadingStep(title: String, body: String, progress: Float? = null) {
         Spacer(Modifier.height(Space.L))
         val c = LedgerTheme.colors
         if (progress == null) {
-            LinearProgressIndicator(Modifier.fillMaxWidth(), color = c.accent, trackColor = c.divider)
+            LinearProgressIndicator(Modifier.fillMaxWidth(), color = c.accent, trackColor = c.fill)
         } else {
-            LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(), color = c.accent, trackColor = c.divider)
+            LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(), color = c.accent, trackColor = c.fill)
         }
     }
 }
@@ -193,8 +194,8 @@ private fun ConfirmStep(
         Spacer(Modifier.height(Space.M))
         LazyColumn(Modifier.weight(1f)) {
             itemsIndexed(found, key = { _, f -> f.account.key }) { index, f ->
-                if (index > 0) RowDivider()
-                Column(Modifier.padding(vertical = Space.M), verticalArrangement = Arrangement.spacedBy(Space.S)) {
+                if (index > 0) Spacer(Modifier.height(Space.M))
+                Column(Modifier.fillMaxWidth().background(c.surface, Radius.Card).padding(Space.L), verticalArrangement = Arrangement.spacedBy(Space.S)) {
                     Row { Text(f.account.label, style = MaterialTheme.typography.titleMedium) }
                     Text(evidence(f), style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
                     ConnectedChoice(

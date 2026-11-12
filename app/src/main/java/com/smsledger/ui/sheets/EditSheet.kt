@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import com.smsledger.ui.components.fieldColors
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -142,6 +143,7 @@ private fun DetailsEditor(tx: Tx, onDetails: (amountPaise: Long, kind: TxKind, p
             label = { Text("Payee") },
             singleLine = true,
             shape = Radius.Control,
+            colors = fieldColors(),
             modifier = Modifier.fillMaxWidth(),
         )
         AmountReadout(amountText)
@@ -165,7 +167,7 @@ private fun rupeesText(paise: Long): String =
 @Composable
 private fun ScopePrompt(payee: String, category: Category, similarCount: Int, onApply: (all: Boolean) -> Unit) {
     val c = LedgerTheme.colors
-    Surface(color = c.surface, shape = Radius.Card, border = BorderStroke(1.dp, c.divider)) {
+    Surface(color = c.bg, shape = Radius.Card) {
         Column(Modifier.padding(Space.L), verticalArrangement = Arrangement.spacedBy(Space.S)) {
             Text("Tag as ${category.name}", style = MaterialTheme.typography.bodySmall, color = c.textSecondary)
             if (similarCount > 1) {

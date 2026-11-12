@@ -64,14 +64,14 @@ class LedgerWidgetReceiver : GlanceAppWidgetReceiver() {
 }
 
 // design.md §4 tokens: the widget uses the app's fixed palette, never the wallpaper.
-private val WarningColor = ColorProvider(day = Color(0xFFB7791F), night = Color(0xFFE2B04A))
-private val OverColor = ColorProvider(day = Color(0xFFC2410C), night = Color(0xFFF08A5D))
-private val TextColor = ColorProvider(day = Color(0xFF1B1C1E), night = Color(0xFFE8E6E1))
-private val DividerColor = ColorProvider(day = Color(0xFFE3E0D8), night = Color(0xFF2A2E33))
-private val SurfaceColor = ColorProvider(day = Color(0xFFFFFFFF), night = Color(0xFF1B1E22))
-private val SecondaryColor = ColorProvider(day = Color(0xFF5E6166), night = Color(0xFF9A9C9F))
-private val AccentColor = ColorProvider(day = Color(0xFF2F45B5), night = Color(0xFF8FA2F2))
-private val OnAccentColor = ColorProvider(day = Color(0xFFFFFFFF), night = Color(0xFF0E1430))
+private val WarningColor = ColorProvider(day = Color(0xFFB25000), night = Color(0xFFFF9F0A))
+private val OverColor = ColorProvider(day = Color(0xFFD70015), night = Color(0xFFFF453A))
+private val TextColor = ColorProvider(day = Color(0xFF000000), night = Color(0xFFFFFFFF))
+private val DividerColor = ColorProvider(day = Color(0xFFE5E5EA), night = Color(0xFF2C2C2E))
+private val SurfaceColor = ColorProvider(day = Color(0xFFFFFFFF), night = Color(0xFF1C1C1E))
+private val SecondaryColor = ColorProvider(day = Color(0xFF6C6C70), night = Color(0xFF98989F))
+private val AccentColor = ColorProvider(day = Color(0xFF007AFF), night = Color(0xFF0A84FF))
+private val OnAccentColor = ColorProvider(day = Color(0xFFFFFFFF), night = Color(0xFFFFFFFF))
 
 @Composable
 private fun WidgetContent(snapshot: WidgetSnapshot) {
@@ -87,7 +87,7 @@ private fun WidgetContent(snapshot: WidgetSnapshot) {
             .fillMaxSize()
             .appWidgetBackground()
             .background(SurfaceColor)
-            .cornerRadius(12.dp)
+            .cornerRadius(24.dp)
             .padding(horizontal = 16.dp, vertical = 12.dp)
             .clickable(actionStartActivity(Intent(context, MainActivity::class.java))),
         verticalAlignment = Alignment.CenterVertically,
@@ -97,7 +97,7 @@ private fun WidgetContent(snapshot: WidgetSnapshot) {
                 snapshot.headline,
                 style = TextStyle(
                     fontSize = 32.sp,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = FontWeight.Bold,
                     color = levelColor,
                 ),
             )
@@ -111,7 +111,7 @@ private fun WidgetContent(snapshot: WidgetSnapshot) {
         Spacer(GlanceModifier.height(8.dp))
         LinearProgressIndicator(
             progress = snapshot.fraction,
-            modifier = GlanceModifier.fillMaxWidth().height(4.dp),
+            modifier = GlanceModifier.fillMaxWidth().height(8.dp),
             color = levelColor,
             backgroundColor = DividerColor,
         )
@@ -126,7 +126,7 @@ private fun WidgetContent(snapshot: WidgetSnapshot) {
                 Box(
                     GlanceModifier
                         .size(48.dp)
-                        .cornerRadius(8.dp)
+                        .cornerRadius(24.dp)
                         .background(AccentColor)
                         .clickable(actionStartActivity(MainActivity.addExpenseIntent(context))),
                     contentAlignment = Alignment.Center,

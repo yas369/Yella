@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -70,9 +71,10 @@ fun LimitHero(status: LimitStatus, spentPaise: Long, limitPaise: Long, modifier:
 fun LimitBar(fraction: Float, level: LimitLevel, modifier: Modifier = Modifier) {
     val fill by animateColorAsState(levelColor(level), MaterialTheme.motionScheme.defaultEffectsSpec(), label = "barColor")
     val progress by animateFloatAsState(fraction, MaterialTheme.motionScheme.defaultSpatialSpec(), label = "barFill")
-    val track = LedgerTheme.colors.divider
+    val track = LedgerTheme.colors.fill
     Canvas(modifier.fillMaxWidth().height(Dims.Bar)) {
-        drawRect(track)
-        drawRect(fill, Offset.Zero, Size(size.width * progress.coerceIn(0f, 1f), size.height))
+        val round = CornerRadius(size.height / 2)
+        drawRoundRect(track, cornerRadius = round)
+        drawRoundRect(fill, Offset.Zero, Size(size.width * progress.coerceIn(0f, 1f), size.height), round)
     }
 }

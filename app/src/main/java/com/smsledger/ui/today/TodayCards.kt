@@ -28,9 +28,9 @@ import com.smsledger.ui.theme.Radius
 import com.smsledger.ui.theme.Size
 import com.smsledger.ui.theme.Space
 
-/** Dark ink on the amber badge in both themes; white on amber falls below 4.5:1. */
+/** White on the dark amber of the light theme, black on the bright amber of the dark theme: both above 4.5:1. */
 @Composable
-private fun onNear(): Color = LedgerTheme.colors.let { if (it.bg.luminance() > 0.5f) it.text else it.bg }
+private fun onNear(): Color = LedgerTheme.colors.let { if (it.bg.luminance() > 0.5f) it.surface else it.bg }
 
 /** §7 Home: a single row, "N to review", with a small count badge. The caller hides it at 0. */
 @Composable
@@ -42,12 +42,12 @@ internal fun NeedsEntryRow(count: Int, onClick: () -> Unit) {
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .defaultMinSize(minHeight = Size.Row)
-            .padding(horizontal = Space.Gutter, vertical = Space.M)
+            .padding(horizontal = Space.L, vertical = Space.M)
             .clearAndSetSemantics { contentDescription = "$count to review"; role = Role.Button },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text("To review", style = MaterialTheme.typography.bodyLarge, color = c.text, modifier = Modifier.weight(1f))
-        Box(Modifier.background(c.near, Radius.Control).padding(horizontal = Space.S, vertical = Space.XS)) {
+        Box(Modifier.background(c.near, Radius.Pill).padding(horizontal = Space.M, vertical = Space.XS)) {
             AnimatedContent(count, transitionSpec = {
                 fadeIn(fast) togetherWith fadeOut(fast)
             }, label = "needsCount") { n ->

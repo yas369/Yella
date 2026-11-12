@@ -26,22 +26,33 @@ object Space {
 /** Corner radii (§5): cards 12dp; buttons, chips and inputs 8dp. Rows have none. */
 object Radius {
     val Card = RoundedCornerShape(12.dp)
-    val Control = RoundedCornerShape(8.dp)
+    val Control = RoundedCornerShape(12.dp)
+    /** Sheets and dialogs. */
+    val Sheet = RoundedCornerShape(20.dp)
+    /** Chips, badges and the add button: fully rounded. */
+    val Pill = RoundedCornerShape(50)
+    /** Segmented control track and the segment raised on it. */
+    val Segmented = RoundedCornerShape(12.dp)
+    val SegmentedInner = RoundedCornerShape(8.dp)
 }
 
 /** Touch targets and row heights (§5). */
 object Size {
     val Touch = 48.dp
     val Row = 56.dp
-    val Bar = 4.dp
+    val Bar = 8.dp
+    /** One segment of a segmented control; with the track's padding the control is 48dp tall. */
+    val Segment = 40.dp
+    /** Separator between rows of a grouped section. */
+    val Hairline = 0.5.dp
 }
 
 private val LedgerShapes = Shapes(
     extraSmall = Radius.Control,
     small = Radius.Control,
     medium = Radius.Card,
-    large = Radius.Card,
-    extraLarge = Radius.Card,
+    large = Radius.Sheet,
+    extraLarge = Radius.Sheet,
 )
 
 /**

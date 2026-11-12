@@ -40,7 +40,12 @@ import com.smsledger.core.money.AmountInput
 import com.smsledger.core.money.formatRupees
 import com.smsledger.ui.components.Emphasis
 import com.smsledger.ui.components.LedgerButton
+import androidx.compose.ui.graphics.Color
+import com.smsledger.ui.components.GroupPosition
 import com.smsledger.ui.components.RowDivider
+import com.smsledger.ui.components.grouped
+import com.smsledger.ui.theme.LargeTitleStyle
+import com.smsledger.ui.theme.SectionStyle
 import com.smsledger.ui.components.TransactionRow
 import com.smsledger.ui.model.Category
 import com.smsledger.ui.model.Tx
@@ -105,7 +110,7 @@ fun HistoryScreen(
     ) {
         item(key = "statusBar") { Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars)) }
         item(key = "title") {
-            Text("History", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = Space.Gutter, end = Space.Gutter, top = Space.L))
+            Text("History", style = LargeTitleStyle, modifier = Modifier.padding(start = Space.Gutter, end = Space.Gutter, top = Space.XL))
         }
         item(key = "search") {
             OutlinedTextField(
@@ -122,9 +127,10 @@ fun HistoryScreen(
                 shape = Radius.Control,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedContainerColor = c.surface,
-                    focusedContainerColor = c.surface,
-                    unfocusedBorderColor = c.divider,
+                    unfocusedContainerColor = c.fill,
+                    focusedContainerColor = c.fill,
+                    unfocusedBorderColor = Color.Transparent,
+                    focusedBorderColor = Color.Transparent,
                 ),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = Space.Gutter, vertical = Space.M),
             )
@@ -153,7 +159,7 @@ fun HistoryScreen(
         filtered.groupBy { it.date }.toSortedMap(reverseOrder()).forEach { (date, dayTx) ->
             stickyHeader(key = "day-$date") { DayHeader(date, dayTx) }
             itemsIndexed(dayTx, key = { _, tx -> tx.id }) { index, tx ->
-                Column {
+                Column(Modifier.grouped(GroupPosition.of(index, dayTx.size))) {
                     if (index > 0) RowDivider()
                     TransactionRow(tx, categoryOf(tx.categoryId), onClick = { onTxClick(tx) })
                 }
@@ -191,15 +197,12 @@ private fun DayHeader(date: LocalDate, dayTx: List<Tx>) {
     val c = LedgerTheme.colors
     val spent = dayTx.filter { it.kind == TxKind.Spend && !it.excluded }.sumOf { it.amountPaise }
     Surface(color = c.bg) {
-        Column {
-            Row(
-                Modifier.fillMaxWidth().padding(start = Space.Gutter, end = Space.Gutter, top = Space.L, bottom = Space.S),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(dayLabel(date), style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, modifier = Modifier.weight(1f))
-                if (spent > 0) Text(formatRupees(spent), style = MoneyStyles.Row, color = c.text)
-            }
-            RowDivider()
+        Row(
+            Modifier.fillMaxWidth().padding(start = Space.Gutter + Space.L, end = Space.Gutter + Space.L, top = Space.L, bottom = Space.S),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(dayLabel(date).uppercase(), style = SectionStyle, color = c.textSecondary, modifier = Modifier.weight(1f))
+            if (spent > 0) Text(formatRupees(spent), style = MoneyStyles.Label, color = c.textSecondary)
         }
     }
 }

@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.ArrowBackIosNew
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -28,7 +28,9 @@ import com.smsledger.core.sms.Account
 import com.smsledger.ui.components.ConnectedChoice
 import com.smsledger.ui.components.Emphasis
 import com.smsledger.ui.components.LedgerButton
-import com.smsledger.ui.components.RowDivider
+import com.smsledger.ui.components.GroupPosition
+import com.smsledger.ui.components.GroupedDivider
+import com.smsledger.ui.components.grouped
 import com.smsledger.ui.model.Category
 import com.smsledger.ui.needs.SmsExcerpt
 import com.smsledger.ui.theme.LedgerTheme
@@ -42,8 +44,8 @@ fun AccountsScreen(accounts: List<AccountState>, onBack: () -> Unit, onSet: (Acc
             item { Empty("No accounts yet. They're found when automatic capture is on.") }
         }
         itemsIndexed(accounts, key = { _, a -> a.account.key }) { index, state ->
-            if (index > 0) RowDivider()
-            Column(Modifier.padding(horizontal = Space.Gutter, vertical = Space.M), verticalArrangement = Arrangement.spacedBy(Space.S)) {
+            if (index > 0) GroupedDivider()
+            Column(Modifier.grouped(GroupPosition.of(index, accounts.size)).padding(horizontal = Space.L, vertical = Space.M), verticalArrangement = Arrangement.spacedBy(Space.S)) {
                 Text(state.account.label, style = MaterialTheme.typography.titleMedium)
                 ConnectedChoice(
                     options = listOf("Mine", "Not mine"),
@@ -63,8 +65,8 @@ fun TemplatesScreen(templates: List<TemplateRecord>, onBack: () -> Unit, onForge
             item { Empty("Nothing learned yet. Messages you teach from To review appear here.") }
         }
         itemsIndexed(templates, key = { _, t -> t.template.key }) { index, record ->
-            if (index > 0) RowDivider()
-            Column(Modifier.padding(horizontal = Space.Gutter, vertical = Space.M), verticalArrangement = Arrangement.spacedBy(Space.S)) {
+            if (index > 0) GroupedDivider()
+            Column(Modifier.grouped(GroupPosition.of(index, templates.size)).padding(horizontal = Space.L, vertical = Space.M), verticalArrangement = Arrangement.spacedBy(Space.S)) {
                 Text(
                     when {
                         !record.template.isTransaction -> "Not a transaction · ignored"
@@ -91,12 +93,12 @@ fun CategoriesScreen(categories: List<Category>, onBack: () -> Unit, onSet: (Str
                 "Spending in a category marked Not daily still shows in History and the month total. It just doesn't use up the daily limit.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = LedgerTheme.colors.textSecondary,
-                modifier = Modifier.padding(horizontal = Space.Gutter, vertical = Space.L),
+                modifier = Modifier.padding(start = Space.Gutter + Space.L, end = Space.Gutter + Space.L, bottom = Space.L),
             )
         }
-        itemsIndexed(categories, key = { _, category -> category.id }) { _, category ->
-            RowDivider()
-            Column(Modifier.padding(horizontal = Space.Gutter, vertical = Space.M), verticalArrangement = Arrangement.spacedBy(Space.S)) {
+        itemsIndexed(categories, key = { _, category -> category.id }) { index, category ->
+            if (index > 0) GroupedDivider()
+            Column(Modifier.grouped(GroupPosition.of(index, categories.size)).padding(horizontal = Space.L, vertical = Space.M), verticalArrangement = Arrangement.spacedBy(Space.S)) {
                 Text(category.name, style = MaterialTheme.typography.titleMedium)
                 ConnectedChoice(
                     options = listOf("Daily", "Not daily"),
@@ -126,8 +128,8 @@ fun PrivacyScreen(smsBuild: Boolean, onBack: () -> Unit) {
     }
     SubScreen("Privacy policy", onBack) {
         itemsIndexed(sections) { index, section ->
-            if (index > 0) RowDivider()
-            Column(Modifier.padding(horizontal = Space.Gutter, vertical = Space.M)) {
+            if (index > 0) GroupedDivider()
+            Column(Modifier.grouped(GroupPosition.of(index, sections.size)).padding(horizontal = Space.L, vertical = Space.M)) {
                 Text(section.first, style = MaterialTheme.typography.titleMedium)
                 Text(section.second, style = MaterialTheme.typography.bodyLarge, color = LedgerTheme.colors.textSecondary)
             }
@@ -141,11 +143,14 @@ private fun SubScreen(title: String, onBack: () -> Unit, content: androidx.compo
     Surface(Modifier.fillMaxSize(), color = c.bg) {
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
             Row(Modifier.padding(horizontal = Space.XS, vertical = Space.S), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back") }
+                IconButton(onClick = onBack) { Icon(Icons.Outlined.ArrowBackIosNew, contentDescription = "Back", tint = LedgerTheme.colors.accent) }
                 Text(title, style = MaterialTheme.typography.titleLarge)
             }
-            RowDivider()
-            LazyColumn(Modifier.fillMaxSize().navigationBarsPadding(), content = content)
+            LazyColumn(
+                Modifier.fillMaxSize().navigationBarsPadding(),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = Space.M, bottom = Space.XXL),
+                content = content,
+            )
         }
     }
 }
@@ -156,6 +161,6 @@ private fun Empty(text: String) {
         text,
         style = MaterialTheme.typography.bodyLarge,
         color = LedgerTheme.colors.textSecondary,
-        modifier = Modifier.padding(horizontal = Space.Gutter, vertical = Space.L),
+        modifier = Modifier.padding(horizontal = Space.Gutter + Space.L, vertical = Space.L),
     )
 }

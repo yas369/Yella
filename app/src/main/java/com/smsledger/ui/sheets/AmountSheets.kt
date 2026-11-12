@@ -10,6 +10,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import com.smsledger.ui.components.fieldColors
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -84,6 +85,7 @@ fun AddExpenseSheet(
                 placeholder = { Text(if (received) "From whom? (optional)" else "Where? (optional)") },
                 singleLine = true,
                 shape = Radius.Control,
+                colors = fieldColors(),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = Space.Gutter),
             )
             if (!received) {
